@@ -1,0 +1,513 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/touxiang.jpg">
+  <link rel="icon" href="/img/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Laiyonggao">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="js代码 12var x &#x3D; &amp;#123;x:0,y:0&amp;#125;;x.c &#x3D; 1; d8 –print_bytecode 生成对应的字节码 123456789101112131415161718LdaConstant [0]Star r1LdaZero Star r2Mov &lt;closure&gt;, r3CallRuntime [DeclareGlobalsForInterpreter">
+<meta property="og:type" content="article">
+<meta property="og:title" content="V8 StaNamedProperty字节码处理程序">
+<meta property="og:url" content="http://example.com/2022/05/04/V8-StaNamedProperty%E5%AD%97%E8%8A%82%E7%A0%81%E5%A4%84%E7%90%86%E7%A8%8B%E5%BA%8F/index.html">
+<meta property="og:site_name" content="赖勇高">
+<meta property="og:description" content="js代码 12var x &#x3D; &amp;#123;x:0,y:0&amp;#125;;x.c &#x3D; 1; d8 –print_bytecode 生成对应的字节码 123456789101112131415161718LdaConstant [0]Star r1LdaZero Star r2Mov &lt;closure&gt;, r3CallRuntime [DeclareGlobalsForInterpreter">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-05-04T09:45:20.000Z">
+<meta property="article:modified_time" content="2022-05-04T09:52:21.325Z">
+<meta property="article:author" content="Laiyonggao">
+<meta property="article:tag" content="字节码">
+<meta name="twitter:card" content="summary_large_image">
+  
+  
+  <title>V8 StaNamedProperty字节码处理程序 - 赖勇高</title>
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css" />
+
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4/github-markdown.min.css" />
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hint.css@2/hint.min.css" />
+
+  
+    
+    
+      
+      <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@10/styles/github-gist.min.css" />
+    
+  
+
+  
+    <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css" />
+  
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_ba1fz6golrf.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+<!-- 自定义样式保持在最底部 -->
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.8.14","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"right","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"copy_btn":true,"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  <header style="height: 70vh;">
+    <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>赖勇高</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div class="banner" id="banner" parallax=true
+         style="background: url('/img/default.png') no-repeat center center;
+           background-size: cover;">
+      <div class="full-bg-img">
+        <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+          <div class="page-header text-center fade-in-up">
+            <span class="h2" id="subtitle" title="V8 StaNamedProperty字节码处理程序">
+              
+            </span>
+
+            
+              <div class="mt-3">
+  
+  
+    <span class="post-meta">
+      <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+      <time datetime="2022-05-04 17:45" pubdate>
+        2022年5月4日 下午
+      </time>
+    </span>
+  
+</div>
+
+<div class="mt-1">
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-chart"></i>
+      13k 字
+    </span>
+  
+
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-clock-fill"></i>
+      
+      
+      112 分钟
+    </span>
+  
+
+  
+  
+</div>
+
+            
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="d-none d-lg-block col-lg-2"></div>
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div class="py-5" id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">V8 StaNamedProperty字节码处理程序</h1>
+            
+            <div class="markdown-body">
+              <p>js代码</p>
+<figure class="highlight js"><table><tr><td class="gutter"><div class="code-wrapper"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></div></td><td class="code"><pre><code class="hljs JS"><span class="hljs-keyword">var</span> x = &#123;<span class="hljs-attr">x</span>:<span class="hljs-number">0</span>,<span class="hljs-attr">y</span>:<span class="hljs-number">0</span>&#125;;<br>x.<span class="hljs-property">c</span> = <span class="hljs-number">1</span>;<br></code></pre></td></tr></table></figure>
+<p>d8 –print_bytecode 生成对应的字节码</p>
+<figure class="highlight armasm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs armasm"><span class="hljs-symbol">LdaConstant</span> [<span class="hljs-number">0</span>]<br><span class="hljs-symbol">Star</span> <span class="hljs-built_in">r1</span><br><span class="hljs-symbol">LdaZero</span> <br><span class="hljs-symbol">Star</span> <span class="hljs-built_in">r2</span><br><span class="hljs-keyword">Mov</span> &lt;closure&gt;, <span class="hljs-built_in">r3</span><br><span class="hljs-symbol">CallRuntime</span> [DeclareGlobalsForInterpreter], <span class="hljs-built_in">r1</span>-<span class="hljs-built_in">r3</span><br><span class="hljs-symbol">StackCheck</span><br><span class="hljs-symbol">CreateObjectLiteral</span> [<span class="hljs-number">1</span>], [<span class="hljs-number">2</span>], <span class="hljs-number">#41</span>, <span class="hljs-built_in">r1</span><br><span class="hljs-symbol">Ldar</span> <span class="hljs-built_in">r1</span><br><span class="hljs-symbol">StaGlobal</span> [<span class="hljs-number">2</span>], [<span class="hljs-number">3</span>]<br><span class="hljs-symbol">LdaGlobal</span> [<span class="hljs-number">2</span>], [<span class="hljs-number">0</span>]<br><span class="hljs-symbol">Star</span> <span class="hljs-built_in">r1</span><br><span class="hljs-symbol">LdaSmi</span> [<span class="hljs-number">1</span>]<br><span class="hljs-symbol">Star</span> <span class="hljs-built_in">r2</span><br><span class="hljs-symbol">StaNamedProperty</span> <span class="hljs-built_in">r1</span>, [<span class="hljs-number">3</span>], [<span class="hljs-number">5</span>]<br><span class="hljs-keyword">Mov</span> <span class="hljs-built_in">r2</span>, <span class="hljs-built_in">r0</span><br><span class="hljs-symbol">Ldar</span> <span class="hljs-built_in">r0</span><br><span class="hljs-symbol">Return</span><br></code></pre></td></tr></table></figure>
+<h3 id="StaNamedProperty字节码代码处理程序"><a href="#StaNamedProperty字节码代码处理程序" class="headerlink" title="StaNamedProperty字节码代码处理程序"></a>StaNamedProperty字节码代码处理程序</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-built_in">IGNITION_HANDLER</span>(StaNamedProperty, InterpreterStoreNamedPropertyAssembler) &#123;<br>  Callable ic = Builtins::<span class="hljs-built_in">CallableFor</span>(<span class="hljs-built_in">isolate</span>(), Builtins::kStoreIC);<br>  <span class="hljs-built_in">StaNamedProperty</span>(ic);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="StoreIC内置函数"><a href="#StoreIC内置函数" class="headerlink" title="StoreIC内置函数"></a>StoreIC内置函数</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">AccessorAssembler::StoreIC</span><span class="hljs-params">(<span class="hljs-type">const</span> StoreICParameters* p)</span> </span>&#123;<br>  <span class="hljs-built_in">VARIABLE</span>(var_handler, MachineRepresentation::kTagged);<br>  <span class="hljs-function">Label <span class="hljs-title">if_handler</span><span class="hljs-params">(<span class="hljs-keyword">this</span>, &amp;var_handler)</span>, <span class="hljs-title">try_polymorphic</span><span class="hljs-params">(<span class="hljs-keyword">this</span>, Label::kDeferred)</span>,</span><br><span class="hljs-function">      <span class="hljs-title">try_megamorphic</span><span class="hljs-params">(<span class="hljs-keyword">this</span>, Label::kDeferred)</span>,</span><br><span class="hljs-function">      <span class="hljs-title">try_uninitialized</span><span class="hljs-params">(<span class="hljs-keyword">this</span>, Label::kDeferred)</span>, <span class="hljs-title">miss</span><span class="hljs-params">(<span class="hljs-keyword">this</span>, Label::kDeferred)</span></span>;<br><br>  Node* receiver_map = <span class="hljs-built_in">LoadReceiverMap</span>(p-&gt;receiver);<br>  <span class="hljs-built_in">GotoIf</span>(<span class="hljs-built_in">IsDeprecatedMap</span>(receiver_map), &amp;miss);<br><br>  <span class="hljs-comment">// Check monomorphic case.</span><br>  Node* feedback =<br>      <span class="hljs-built_in">TryMonomorphicCase</span>(p-&gt;slot, p-&gt;vector, receiver_map, &amp;if_handler,<br>                         &amp;var_handler, &amp;try_polymorphic);<br>  <span class="hljs-built_in">BIND</span>(&amp;if_handler);<br>  &#123;<br>    <span class="hljs-built_in">Comment</span>(<span class="hljs-string">&quot;StoreIC_if_handler&quot;</span>);<br>    <span class="hljs-built_in">HandleStoreICHandlerCase</span>(p, var_handler.<span class="hljs-built_in">value</span>(), &amp;miss,<br>                             ICMode::kNonGlobalIC);<br>  &#125;<br><br>  <span class="hljs-built_in">BIND</span>(&amp;try_polymorphic);<br>  &#123;<br>    <span class="hljs-comment">// Check polymorphic case.</span><br>    <span class="hljs-built_in">Comment</span>(<span class="hljs-string">&quot;StoreIC_try_polymorphic&quot;</span>);<br>    <span class="hljs-built_in">GotoIfNot</span>(<br>        <span class="hljs-built_in">WordEqual</span>(<span class="hljs-built_in">LoadMap</span>(feedback), <span class="hljs-built_in">LoadRoot</span>(Heap::kFixedArrayMapRootIndex)),<br>        &amp;try_megamorphic);<br>    <span class="hljs-built_in">HandlePolymorphicCase</span>(receiver_map, feedback, &amp;if_handler, &amp;var_handler,<br>                          &amp;miss, <span class="hljs-number">2</span>);<br>  &#125;<br><br>  <span class="hljs-built_in">BIND</span>(&amp;try_megamorphic);<br>  &#123;<br>    <span class="hljs-comment">// Check megamorphic case.</span><br>    <span class="hljs-built_in">GotoIfNot</span>(<span class="hljs-built_in">WordEqual</span>(feedback, <span class="hljs-built_in">LoadRoot</span>(Heap::kmegamorphic_symbolRootIndex)),<br>              &amp;try_uninitialized);<br><br>    <span class="hljs-built_in">TryProbeStubCache</span>(<span class="hljs-built_in">isolate</span>()-&gt;<span class="hljs-built_in">store_stub_cache</span>(), p-&gt;receiver, p-&gt;name,<br>                      &amp;if_handler, &amp;var_handler, &amp;miss);<br>  &#125;<br>  <span class="hljs-built_in">BIND</span>(&amp;try_uninitialized);<br>  &#123;<br>    <span class="hljs-comment">// Check uninitialized case.</span><br>    <span class="hljs-built_in">GotoIfNot</span>(<br>        <span class="hljs-built_in">WordEqual</span>(feedback, <span class="hljs-built_in">LoadRoot</span>(Heap::kuninitialized_symbolRootIndex)),<br>        &amp;miss);<br>    Callable stub =<br>        Builtins::<span class="hljs-built_in">CallableFor</span>(<span class="hljs-built_in">isolate</span>(), Builtins::kStoreIC_Uninitialized);<br>    <span class="hljs-built_in">TailCallStub</span>(stub, p-&gt;context, p-&gt;receiver, p-&gt;name, p-&gt;value, p-&gt;slot,<br>                 p-&gt;vector);<br>  &#125;<br>  <span class="hljs-built_in">BIND</span>(&amp;miss);<br>  &#123;<br>    <span class="hljs-built_in">TailCallRuntime</span>(Runtime::kStoreIC_Miss, p-&gt;context, p-&gt;value, p-&gt;slot,<br>                    p-&gt;vector, p-&gt;receiver, p-&gt;name);<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="内置函数StoreIC-Uninitialized"><a href="#内置函数StoreIC-Uninitialized" class="headerlink" title="内置函数StoreIC_Uninitialized"></a>内置函数StoreIC_Uninitialized</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">KeyedStoreGenericAssembler::StoreIC_Uninitialized</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-keyword">typedef</span> StoreWithVectorDescriptor Descriptor;<br><br>  Node* receiver = <span class="hljs-built_in">Parameter</span>(Descriptor::kReceiver);<br>  Node* name = <span class="hljs-built_in">Parameter</span>(Descriptor::kName);<br>  Node* value = <span class="hljs-built_in">Parameter</span>(Descriptor::kValue);<br>  Node* slot = <span class="hljs-built_in">Parameter</span>(Descriptor::kSlot);<br>  Node* vector = <span class="hljs-built_in">Parameter</span>(Descriptor::kVector);<br>  Node* context = <span class="hljs-built_in">Parameter</span>(Descriptor::kContext);<br><br>  <span class="hljs-function">Label <span class="hljs-title">miss</span><span class="hljs-params">(<span class="hljs-keyword">this</span>)</span></span>;<br><br>  <span class="hljs-built_in">GotoIf</span>(<span class="hljs-built_in">TaggedIsSmi</span>(receiver), &amp;miss);<br>  Node* receiver_map = <span class="hljs-built_in">LoadMap</span>(receiver);<br>  Node* instance_type = <span class="hljs-built_in">LoadMapInstanceType</span>(receiver_map);<br>  <span class="hljs-comment">// Receivers requiring non-standard element accesses (interceptors, access</span><br>  <span class="hljs-comment">// checks, strings and string wrappers, proxies) are handled in the runtime.</span><br>  <span class="hljs-built_in">GotoIf</span>(<span class="hljs-built_in">Int32LessThanOrEqual</span>(instance_type,<br>                              <span class="hljs-built_in">Int32Constant</span>(LAST_SPECIAL_RECEIVER_TYPE)),<br>         &amp;miss);<br><br>  <span class="hljs-comment">// Optimistically write the state transition to the vector.</span><br>  <span class="hljs-built_in">StoreFeedbackVectorSlot</span>(vector, slot,<br>                          <span class="hljs-built_in">LoadRoot</span>(Heap::kpremonomorphic_symbolRootIndex),<br>                          SKIP_WRITE_BARRIER, <span class="hljs-number">0</span>, SMI_PARAMETERS);<br><br>  <span class="hljs-function">StoreICParameters <span class="hljs-title">p</span><span class="hljs-params">(context, receiver, name, value, slot, vector)</span></span>;<br>  <span class="hljs-built_in">EmitGenericPropertyStore</span>(receiver, receiver_map, &amp;p, &amp;miss,<br>                           kDontUseStubCache);<br><br>  <span class="hljs-built_in">BIND</span>(&amp;miss);<br>  &#123;<br>    <span class="hljs-comment">// Undo the optimistic state transition.</span><br>    <span class="hljs-built_in">StoreFeedbackVectorSlot</span>(vector, slot,<br>                            <span class="hljs-built_in">LoadRoot</span>(Heap::kuninitialized_symbolRootIndex),<br>                            SKIP_WRITE_BARRIER, <span class="hljs-number">0</span>, SMI_PARAMETERS);<br>    <span class="hljs-built_in">Print</span>(<span class="hljs-string">&quot;laiyonggao KeyedStoreGenericAssembler::kStoreIC_Miss \n&quot;</span>);<br>    <span class="hljs-built_in">TailCallRuntime</span>(Runtime::kStoreIC_Miss, context, value, slot, vector,<br>                    receiver, name);<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="StoreIC-Miss"><a href="#StoreIC-Miss" class="headerlink" title="StoreIC_Miss"></a>StoreIC_Miss</h3><p>如果对象没有此属性，则走miss流程，调用运行时函数StoreIC_Miss</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-built_in">RUNTIME_FUNCTION</span>(Runtime_StoreIC_Miss) &#123;<br>  <span class="hljs-function">HandleScope <span class="hljs-title">scope</span><span class="hljs-params">(isolate)</span></span>;<br>  <span class="hljs-built_in">DCHECK_EQ</span>(<span class="hljs-number">5</span>, args.<span class="hljs-built_in">length</span>());<br>  <span class="hljs-comment">// Runtime functions don&#x27;t follow the IC&#x27;s calling convention.</span><br>  Handle&lt;Object&gt; value = args.<span class="hljs-built_in">at</span>(<span class="hljs-number">0</span>);<br>  Handle&lt;Smi&gt; slot = args.<span class="hljs-built_in">at</span>&lt;Smi&gt;(<span class="hljs-number">1</span>);<br>  Handle&lt;FeedbackVector&gt; vector = args.<span class="hljs-built_in">at</span>&lt;FeedbackVector&gt;(<span class="hljs-number">2</span>);<br>  Handle&lt;Object&gt; receiver = args.<span class="hljs-built_in">at</span>(<span class="hljs-number">3</span>);<br>  Handle&lt;Name&gt; key = args.<span class="hljs-built_in">at</span>&lt;Name&gt;(<span class="hljs-number">4</span>);<br>  FeedbackSlot vector_slot = vector-&gt;<span class="hljs-built_in">ToSlot</span>(slot-&gt;<span class="hljs-built_in">value</span>());<br>  FeedbackSlotKind kind = vector-&gt;<span class="hljs-built_in">GetKind</span>(vector_slot);<br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">IsStoreICKind</span>(kind) || <span class="hljs-built_in">IsStoreOwnICKind</span>(kind)) &#123;<br>    <span class="hljs-function">StoreICNexus <span class="hljs-title">nexus</span><span class="hljs-params">(vector, vector_slot)</span></span>;<br>    <span class="hljs-function">StoreIC <span class="hljs-title">ic</span><span class="hljs-params">(isolate, &amp;nexus)</span></span>;<br>    ic.<span class="hljs-built_in">UpdateState</span>(receiver, key);<br>    <span class="hljs-built_in">RETURN_RESULT_OR_FAILURE</span>(isolate, ic.<span class="hljs-built_in">Store</span>(receiver, key, value));<br>  &#125; <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (<span class="hljs-built_in">IsStoreGlobalICKind</span>(kind)) &#123;<br>    <span class="hljs-built_in">DCHECK_EQ</span>(isolate-&gt;<span class="hljs-built_in">native_context</span>()-&gt;<span class="hljs-built_in">global_proxy</span>(), *receiver);<br>    receiver = isolate-&gt;<span class="hljs-built_in">global_object</span>();<br>    <span class="hljs-function">StoreGlobalICNexus <span class="hljs-title">nexus</span><span class="hljs-params">(vector, vector_slot)</span></span>;<br>    <span class="hljs-function">StoreGlobalIC <span class="hljs-title">ic</span><span class="hljs-params">(isolate, &amp;nexus)</span></span>;<br>    ic.<span class="hljs-built_in">UpdateState</span>(receiver, key);<br>    <span class="hljs-built_in">RETURN_RESULT_OR_FAILURE</span>(isolate, ic.<span class="hljs-built_in">Store</span>(key, value));<br>  &#125; <span class="hljs-keyword">else</span> &#123;<br>    <span class="hljs-built_in">DCHECK</span>(<span class="hljs-built_in">IsKeyedStoreICKind</span>(kind));<br>    <span class="hljs-function">KeyedStoreICNexus <span class="hljs-title">nexus</span><span class="hljs-params">(vector, vector_slot)</span></span>;<br>    <span class="hljs-function">KeyedStoreIC <span class="hljs-title">ic</span><span class="hljs-params">(isolate, &amp;nexus)</span></span>;<br>    ic.<span class="hljs-built_in">UpdateState</span>(receiver, key);<br>    <span class="hljs-built_in">RETURN_RESULT_OR_FAILURE</span>(isolate, ic.<span class="hljs-built_in">Store</span>(receiver, key, value));<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="StoreIC-Store"><a href="#StoreIC-Store" class="headerlink" title="StoreIC::Store"></a>StoreIC::Store</h3><p>调用StoreIC::Store</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function">MaybeHandle&lt;Object&gt; <span class="hljs-title">StoreIC::Store</span><span class="hljs-params">(Handle&lt;Object&gt; object, Handle&lt;Name&gt; name,</span></span><br><span class="hljs-params"><span class="hljs-function">                                   Handle&lt;Object&gt; value,</span></span><br><span class="hljs-params"><span class="hljs-function">                                   JSReceiver::StoreFromKeyed store_mode)</span> </span>&#123;<br>  <span class="hljs-comment">// TODO(verwaest): Let SetProperty do the migration, since storing a property</span><br>  <span class="hljs-comment">// might deprecate the current map again, if value does not fit.</span><br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">MigrateDeprecated</span>(object)) &#123;<br>    Handle&lt;Object&gt; result;<br>    <span class="hljs-built_in">ASSIGN_RETURN_ON_EXCEPTION</span>(<br>        <span class="hljs-built_in">isolate</span>(), result,<br>        Object::<span class="hljs-built_in">SetProperty</span>(object, name, value, <span class="hljs-built_in">language_mode</span>()), Object);<br>    <span class="hljs-keyword">return</span> result;<br>  &#125;<br><br>  <span class="hljs-comment">// If the object is undefined or null it&#x27;s illegal to try to set any</span><br>  <span class="hljs-comment">// properties on it; throw a TypeError in that case.</span><br>  <span class="hljs-keyword">if</span> (object-&gt;<span class="hljs-built_in">IsNullOrUndefined</span>(<span class="hljs-built_in">isolate</span>())) &#123;<br>    <span class="hljs-keyword">if</span> (FLAG_use_ic &amp;&amp; <span class="hljs-built_in">state</span>() != PREMONOMORPHIC) &#123;<br>      <span class="hljs-comment">// Ensure the IC state progresses.</span><br>      <span class="hljs-built_in">TRACE_HANDLER_STATS</span>(<span class="hljs-built_in">isolate</span>(), StoreIC_NonReceiver);<br>      <span class="hljs-built_in">update_receiver_map</span>(object);<br>      <span class="hljs-built_in">PatchCache</span>(name, <span class="hljs-built_in">slow_stub</span>());<br>      <span class="hljs-built_in">TRACE_IC</span>(<span class="hljs-string">&quot;StoreIC&quot;</span>, name);<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> <span class="hljs-built_in">TypeError</span>(MessageTemplate::kNonObjectPropertyStore, object, name);<br>  &#125;<br><br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">state</span>() != UNINITIALIZED) &#123;<br>    JSObject::<span class="hljs-built_in">MakePrototypesFast</span>(object, kStartAtPrototype, <span class="hljs-built_in">isolate</span>());<br>  &#125;<br>  MaybeHandle&lt;Object&gt; cached_handler;<br>  Handle&lt;Map&gt; transition_map;<br>  <span class="hljs-keyword">if</span> (object-&gt;<span class="hljs-built_in">IsJSReceiver</span>()) &#123;<br>    name = <span class="hljs-built_in">isolate</span>()-&gt;<span class="hljs-built_in">factory</span>()-&gt;<span class="hljs-built_in">InternalizeName</span>(name);<br>    <span class="hljs-function">TransitionsAccessor <span class="hljs-title">transitions</span><span class="hljs-params">(receiver_map())</span></span>;<br>    Object* maybe_handler = transitions.<span class="hljs-built_in">SearchHandler</span>(*name, &amp;transition_map);<br>    <span class="hljs-keyword">if</span> (maybe_handler != <span class="hljs-literal">nullptr</span>) &#123;<br>      cached_handler = <span class="hljs-built_in">MaybeHandle</span>&lt;Object&gt;(maybe_handler, <span class="hljs-built_in">isolate</span>());<br>    &#125;<br>  &#125;<br><br>  LookupIterator it = LookupIterator::<span class="hljs-built_in">ForTransitionHandler</span>(<br>      <span class="hljs-built_in">isolate</span>(), object, name, value, cached_handler, transition_map);<br>  <span class="hljs-keyword">if</span> (FLAG_use_ic) <span class="hljs-built_in">UpdateCaches</span>(&amp;it, value, store_mode, cached_handler);<br><br>  <span class="hljs-built_in">MAYBE_RETURN_NULL</span>(<br>      Object::<span class="hljs-built_in">SetProperty</span>(&amp;it, value, <span class="hljs-built_in">language_mode</span>(), store_mode));<br>  <span class="hljs-keyword">return</span> value;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="Object-SetProperty"><a href="#Object-SetProperty" class="headerlink" title="Object::SetProperty"></a>Object::SetProperty</h3><p>调用Object::SetProperty</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function">Maybe&lt;<span class="hljs-type">bool</span>&gt; <span class="hljs-title">Object::SetProperty</span><span class="hljs-params">(LookupIterator* it, Handle&lt;Object&gt; value,</span></span><br><span class="hljs-params"><span class="hljs-function">                                LanguageMode language_mode,</span></span><br><span class="hljs-params"><span class="hljs-function">                                StoreFromKeyed store_mode)</span> </span>&#123;<br>  <span class="hljs-keyword">if</span> (it-&gt;<span class="hljs-built_in">IsFound</span>()) &#123;<br>    <span class="hljs-type">bool</span> found = <span class="hljs-literal">true</span>;<br>    Maybe&lt;<span class="hljs-type">bool</span>&gt; result =<br>        <span class="hljs-built_in">SetPropertyInternal</span>(it, value, language_mode, store_mode, &amp;found);<br>    <span class="hljs-keyword">if</span> (found) <span class="hljs-keyword">return</span> result;<br>  &#125;<br><br>  <span class="hljs-comment">// If the receiver is the JSGlobalObject, the store was contextual. In case</span><br>  <span class="hljs-comment">// the property did not exist yet on the global object itself, we have to</span><br>  <span class="hljs-comment">// throw a reference error in strict mode.  In sloppy mode, we continue.</span><br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">is_strict</span>(language_mode) &amp;&amp; it-&gt;<span class="hljs-built_in">GetReceiver</span>()-&gt;<span class="hljs-built_in">IsJSGlobalObject</span>()) &#123;<br>    it-&gt;<span class="hljs-built_in">isolate</span>()-&gt;<span class="hljs-built_in">Throw</span>(*it-&gt;<span class="hljs-built_in">isolate</span>()-&gt;<span class="hljs-built_in">factory</span>()-&gt;<span class="hljs-built_in">NewReferenceError</span>(<br>        MessageTemplate::kNotDefined, it-&gt;<span class="hljs-built_in">name</span>()));<br>    <span class="hljs-keyword">return</span> <span class="hljs-built_in">Nothing</span>&lt;<span class="hljs-type">bool</span>&gt;();<br>  &#125;<br><br>  ShouldThrow should_throw =<br>      <span class="hljs-built_in">is_sloppy</span>(language_mode) ? kDontThrow : kThrowOnError;<br>  <span class="hljs-keyword">return</span> <span class="hljs-built_in">AddDataProperty</span>(it, value, NONE, should_throw, store_mode);<br>&#125;<br><br></code></pre></td></tr></table></figure>
+<h3 id="SetPropertyInternal"><a href="#SetPropertyInternal" class="headerlink" title="SetPropertyInternal"></a>SetPropertyInternal</h3><p>如果属性存在对象里则调用SetPropertyInternal</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function">Maybe&lt;<span class="hljs-type">bool</span>&gt; <span class="hljs-title">Object::SetPropertyInternal</span><span class="hljs-params">(LookupIterator* it,</span></span><br><span class="hljs-params"><span class="hljs-function">                                        Handle&lt;Object&gt; value,</span></span><br><span class="hljs-params"><span class="hljs-function">                                        LanguageMode language_mode,</span></span><br><span class="hljs-params"><span class="hljs-function">                                        StoreFromKeyed store_mode,</span></span><br><span class="hljs-params"><span class="hljs-function">                                        <span class="hljs-type">bool</span>* found)</span> </span>&#123;<br>  it-&gt;<span class="hljs-built_in">UpdateProtector</span>();<br>  <span class="hljs-built_in">DCHECK</span>(it-&gt;<span class="hljs-built_in">IsFound</span>());<br>  ShouldThrow should_throw =<br>      <span class="hljs-built_in">is_sloppy</span>(language_mode) ? kDontThrow : kThrowOnError;<br><br>  <span class="hljs-comment">// Make sure that the top context does not change when doing callbacks or</span><br>  <span class="hljs-comment">// interceptor calls.</span><br>  <span class="hljs-function">AssertNoContextChange <span class="hljs-title">ncc</span><span class="hljs-params">(it-&gt;isolate())</span></span>;<br><br>  <span class="hljs-keyword">do</span> &#123;<br>    <span class="hljs-keyword">switch</span> (it-&gt;<span class="hljs-built_in">state</span>()) &#123;<br>      <span class="hljs-keyword">case</span> LookupIterator::NOT_FOUND:<br>        <span class="hljs-built_in">UNREACHABLE</span>();<br><br>      <span class="hljs-keyword">case</span> LookupIterator::ACCESS_CHECK:<br>        <span class="hljs-keyword">if</span> (it-&gt;<span class="hljs-built_in">HasAccess</span>()) <span class="hljs-keyword">break</span>;<br>        <span class="hljs-comment">// Check whether it makes sense to reuse the lookup iterator. Here it</span><br>        <span class="hljs-comment">// might still call into setters up the prototype chain.</span><br>        <span class="hljs-keyword">return</span> JSObject::<span class="hljs-built_in">SetPropertyWithFailedAccessCheck</span>(it, value,<br>                                                          should_throw);<br><br>      <span class="hljs-keyword">case</span> LookupIterator::JSPROXY:<br>        <span class="hljs-keyword">return</span> JSProxy::<span class="hljs-built_in">SetProperty</span>(it-&gt;<span class="hljs-built_in">GetHolder</span>&lt;JSProxy&gt;(), it-&gt;<span class="hljs-built_in">GetName</span>(),<br>                                    value, it-&gt;<span class="hljs-built_in">GetReceiver</span>(), language_mode);<br><br>      <span class="hljs-keyword">case</span> LookupIterator::INTERCEPTOR: &#123;<br>        <span class="hljs-keyword">if</span> (it-&gt;<span class="hljs-built_in">HolderIsReceiverOrHiddenPrototype</span>()) &#123;<br>          Maybe&lt;<span class="hljs-type">bool</span>&gt; result =<br>              JSObject::<span class="hljs-built_in">SetPropertyWithInterceptor</span>(it, should_throw, value);<br>          <span class="hljs-keyword">if</span> (result.<span class="hljs-built_in">IsNothing</span>() || result.<span class="hljs-built_in">FromJust</span>()) <span class="hljs-keyword">return</span> result;<br>        &#125; <span class="hljs-keyword">else</span> &#123;<br>          Maybe&lt;PropertyAttributes&gt; maybe_attributes =<br>              JSObject::<span class="hljs-built_in">GetPropertyAttributesWithInterceptor</span>(it);<br>          <span class="hljs-keyword">if</span> (maybe_attributes.<span class="hljs-built_in">IsNothing</span>()) <span class="hljs-keyword">return</span> <span class="hljs-built_in">Nothing</span>&lt;<span class="hljs-type">bool</span>&gt;();<br>          <span class="hljs-keyword">if</span> ((maybe_attributes.<span class="hljs-built_in">FromJust</span>() &amp; READ_ONLY) != <span class="hljs-number">0</span>) &#123;<br>            <span class="hljs-keyword">return</span> <span class="hljs-built_in">WriteToReadOnlyProperty</span>(it, value, should_throw);<br>          &#125;<br>          <span class="hljs-keyword">if</span> (maybe_attributes.<span class="hljs-built_in">FromJust</span>() == ABSENT) <span class="hljs-keyword">break</span>;<br>          *found = <span class="hljs-literal">false</span>;<br>          <span class="hljs-keyword">return</span> <span class="hljs-built_in">Nothing</span>&lt;<span class="hljs-type">bool</span>&gt;();<br>        &#125;<br>        <span class="hljs-keyword">break</span>;<br>      &#125;<br><br>      <span class="hljs-keyword">case</span> LookupIterator::ACCESSOR: &#123;<br>        <span class="hljs-keyword">if</span> (it-&gt;<span class="hljs-built_in">IsReadOnly</span>()) &#123;<br>          <span class="hljs-keyword">return</span> <span class="hljs-built_in">WriteToReadOnlyProperty</span>(it, value, should_throw);<br>        &#125;<br>        Handle&lt;Object&gt; accessors = it-&gt;<span class="hljs-built_in">GetAccessors</span>();<br>        <span class="hljs-keyword">if</span> (accessors-&gt;<span class="hljs-built_in">IsAccessorInfo</span>() &amp;&amp;<br>            !it-&gt;<span class="hljs-built_in">HolderIsReceiverOrHiddenPrototype</span>() &amp;&amp;<br>            AccessorInfo::<span class="hljs-built_in">cast</span>(*accessors)-&gt;<span class="hljs-built_in">is_special_data_property</span>()) &#123;<br>          *found = <span class="hljs-literal">false</span>;<br>          <span class="hljs-keyword">return</span> <span class="hljs-built_in">Nothing</span>&lt;<span class="hljs-type">bool</span>&gt;();<br>        &#125;<br>        <span class="hljs-keyword">return</span> <span class="hljs-built_in">SetPropertyWithAccessor</span>(it, value, should_throw);<br>      &#125;<br>      <span class="hljs-keyword">case</span> LookupIterator::INTEGER_INDEXED_EXOTIC:<br>        <span class="hljs-comment">// TODO(verwaest): We should throw an exception if holder is receiver.</span><br>        <span class="hljs-keyword">return</span> <span class="hljs-built_in">Just</span>(<span class="hljs-literal">true</span>);<br><br>      <span class="hljs-keyword">case</span> LookupIterator::DATA:<br>        <span class="hljs-keyword">if</span> (it-&gt;<span class="hljs-built_in">IsReadOnly</span>()) &#123;<br>          <span class="hljs-keyword">return</span> <span class="hljs-built_in">WriteToReadOnlyProperty</span>(it, value, should_throw);<br>        &#125;<br>        <span class="hljs-keyword">if</span> (it-&gt;<span class="hljs-built_in">HolderIsReceiverOrHiddenPrototype</span>()) &#123;<br>          <span class="hljs-keyword">return</span> <span class="hljs-built_in">SetDataProperty</span>(it, value);<br>        &#125;<br>      <span class="hljs-comment">// Fall through.</span><br>      <span class="hljs-keyword">case</span> LookupIterator::TRANSITION:<br>        *found = <span class="hljs-literal">false</span>;<br>        <span class="hljs-keyword">return</span> <span class="hljs-built_in">Nothing</span>&lt;<span class="hljs-type">bool</span>&gt;();<br>    &#125;<br>    it-&gt;<span class="hljs-built_in">Next</span>();<br>  &#125; <span class="hljs-keyword">while</span> (it-&gt;<span class="hljs-built_in">IsFound</span>());<br><br>  *found = <span class="hljs-literal">false</span>;<br>  <span class="hljs-keyword">return</span> <span class="hljs-built_in">Nothing</span>&lt;<span class="hljs-type">bool</span>&gt;();<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="Object-AddDataProperty"><a href="#Object-AddDataProperty" class="headerlink" title="Object::AddDataProperty"></a>Object::AddDataProperty</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function">Maybe&lt;<span class="hljs-type">bool</span>&gt; <span class="hljs-title">Object::AddDataProperty</span><span class="hljs-params">(LookupIterator* it, Handle&lt;Object&gt; value,</span></span><br><span class="hljs-params"><span class="hljs-function">                                    PropertyAttributes attributes,</span></span><br><span class="hljs-params"><span class="hljs-function">                                    ShouldThrow should_throw,</span></span><br><span class="hljs-params"><span class="hljs-function">                                    StoreFromKeyed store_mode)</span> </span>&#123;<br>  <span class="hljs-keyword">if</span> (!it-&gt;<span class="hljs-built_in">GetReceiver</span>()-&gt;<span class="hljs-built_in">IsJSObject</span>()) &#123;<br>    <span class="hljs-keyword">if</span> (it-&gt;<span class="hljs-built_in">GetReceiver</span>()-&gt;<span class="hljs-built_in">IsJSProxy</span>() &amp;&amp; it-&gt;<span class="hljs-built_in">GetName</span>()-&gt;<span class="hljs-built_in">IsPrivate</span>()) &#123;<br>      <span class="hljs-built_in">RETURN_FAILURE</span>(it-&gt;<span class="hljs-built_in">isolate</span>(), should_throw,<br>                     <span class="hljs-built_in">NewTypeError</span>(MessageTemplate::kProxyPrivate));<br>    &#125;<br>    <span class="hljs-keyword">return</span> <span class="hljs-built_in">CannotCreateProperty</span>(it-&gt;<span class="hljs-built_in">isolate</span>(), it-&gt;<span class="hljs-built_in">GetReceiver</span>(), it-&gt;<span class="hljs-built_in">GetName</span>(),<br>                                value, should_throw);<br>  &#125;<br><br>  <span class="hljs-built_in">DCHECK_NE</span>(LookupIterator::INTEGER_INDEXED_EXOTIC, it-&gt;<span class="hljs-built_in">state</span>());<br><br>  Handle&lt;JSObject&gt; receiver = it-&gt;<span class="hljs-built_in">GetStoreTarget</span>();<br><br>  <span class="hljs-comment">// If the receiver is a JSGlobalProxy, store on the prototype (JSGlobalObject)</span><br>  <span class="hljs-comment">// instead. If the prototype is Null, the proxy is detached.</span><br>  <span class="hljs-keyword">if</span> (receiver-&gt;<span class="hljs-built_in">IsJSGlobalProxy</span>()) <span class="hljs-keyword">return</span> <span class="hljs-built_in">Just</span>(<span class="hljs-literal">true</span>);<br><br>  Isolate* isolate = it-&gt;<span class="hljs-built_in">isolate</span>();<br><br>  <span class="hljs-keyword">if</span> (it-&gt;<span class="hljs-built_in">ExtendingNonExtensible</span>(receiver)) &#123;<br>    <span class="hljs-built_in">RETURN_FAILURE</span>(<br>        isolate, should_throw,<br>        <span class="hljs-built_in">NewTypeError</span>(MessageTemplate::kObjectNotExtensible, it-&gt;<span class="hljs-built_in">GetName</span>()));<br>  &#125;<br><br>  <span class="hljs-keyword">if</span> (it-&gt;<span class="hljs-built_in">IsElement</span>()) &#123;<br>    <span class="hljs-keyword">if</span> (receiver-&gt;<span class="hljs-built_in">IsJSArray</span>()) &#123;<br>      Handle&lt;JSArray&gt; array = Handle&lt;JSArray&gt;::<span class="hljs-built_in">cast</span>(receiver);<br>      <span class="hljs-keyword">if</span> (JSArray::<span class="hljs-built_in">WouldChangeReadOnlyLength</span>(array, it-&gt;<span class="hljs-built_in">index</span>())) &#123;<br>        <span class="hljs-built_in">RETURN_FAILURE</span>(array-&gt;<span class="hljs-built_in">GetIsolate</span>(), should_throw,<br>                       <span class="hljs-built_in">NewTypeError</span>(MessageTemplate::kStrictReadOnlyProperty,<br>                                    isolate-&gt;<span class="hljs-built_in">factory</span>()-&gt;<span class="hljs-built_in">length_string</span>(),<br>                                    Object::<span class="hljs-built_in">TypeOf</span>(isolate, array), array));<br>      &#125;<br><br>      <span class="hljs-keyword">if</span> (FLAG_trace_external_array_abuse &amp;&amp;<br>          array-&gt;<span class="hljs-built_in">HasFixedTypedArrayElements</span>()) &#123;<br>        <span class="hljs-built_in">CheckArrayAbuse</span>(array, <span class="hljs-string">&quot;typed elements write&quot;</span>, it-&gt;<span class="hljs-built_in">index</span>(), <span class="hljs-literal">true</span>);<br>      &#125;<br><br>      <span class="hljs-keyword">if</span> (FLAG_trace_js_array_abuse &amp;&amp; !array-&gt;<span class="hljs-built_in">HasFixedTypedArrayElements</span>()) &#123;<br>        <span class="hljs-built_in">CheckArrayAbuse</span>(array, <span class="hljs-string">&quot;elements write&quot;</span>, it-&gt;<span class="hljs-built_in">index</span>(), <span class="hljs-literal">false</span>);<br>      &#125;<br>    &#125;<br><br>    Maybe&lt;<span class="hljs-type">bool</span>&gt; result = JSObject::<span class="hljs-built_in">AddDataElement</span>(receiver, it-&gt;<span class="hljs-built_in">index</span>(), value,<br>                                                  attributes, should_throw);<br>    JSObject::<span class="hljs-built_in">ValidateElements</span>(*receiver);<br>    <span class="hljs-keyword">return</span> result;<br>  &#125; <span class="hljs-keyword">else</span> &#123;<br>    it-&gt;<span class="hljs-built_in">UpdateProtector</span>();<br>    <span class="hljs-comment">// Migrate to the most up-to-date map that will be able to store |value|</span><br>    <span class="hljs-comment">// under it-&gt;name() with |attributes|.</span><br>    it-&gt;<span class="hljs-built_in">PrepareTransitionToDataProperty</span>(receiver, value, attributes,<br>                                        store_mode);<br>    <span class="hljs-built_in">DCHECK_EQ</span>(LookupIterator::TRANSITION, it-&gt;<span class="hljs-built_in">state</span>());<br>    it-&gt;<span class="hljs-built_in">ApplyTransitionToDataProperty</span>(receiver);<br><br>    <span class="hljs-comment">// Write the property value.</span><br>    it-&gt;<span class="hljs-built_in">WriteDataValue</span>(value, <span class="hljs-literal">true</span>);<br><br><span class="hljs-meta">#<span class="hljs-keyword">if</span> VERIFY_HEAP</span><br>    <span class="hljs-keyword">if</span> (FLAG_verify_heap) &#123;<br>      receiver-&gt;<span class="hljs-built_in">JSObjectVerify</span>();<br>    &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br>  &#125;<br><br>  <span class="hljs-keyword">return</span> <span class="hljs-built_in">Just</span>(<span class="hljs-literal">true</span>);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="最后调用"><a href="#最后调用" class="headerlink" title="最后调用"></a>最后调用</h3><p>LookupIterator::UpdateProtector-&gt;LookupIterator::PrepareTransitionToDataProperty-&gt;LookupIterator::WriteDataValue</p>
+<p>同步知乎：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/80112470">https://zhuanlan.zhihu.com/p/80112470</a></p>
+
+            </div>
+            <hr>
+            <div>
+              <div class="post-metas mb-3">
+                
+                  <div class="post-meta mr-3">
+                    <i class="iconfont icon-category"></i>
+                    
+                      <a class="hover-with-bg" href="/categories/V8/">V8</a>
+                    
+                  </div>
+                
+                
+                  <div class="post-meta">
+                    <i class="iconfont icon-tags"></i>
+                    
+                      <a class="hover-with-bg" href="/tags/%E5%AD%97%E8%8A%82%E7%A0%81/">字节码</a>
+                    
+                  </div>
+                
+              </div>
+              
+                <p class="note note-warning">
+                  
+                    本博客所有文章除特别声明外，均采用 <a target="_blank" href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh" rel="nofollow noopener noopener">CC BY-SA 4.0 协议</a> ，转载请注明出处！
+                  
+                </p>
+              
+              
+                <div class="post-prevnext">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/05/04/V8-CreateObjectLiteral%E5%AD%97%E8%8A%82%E7%A0%81%E5%A4%84%E7%90%86%E7%A8%8B%E5%BA%8F/">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">V8 CreateObjectLiteral字节码处理程序</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/05/04/NG-Block-Layout/">
+                        <span class="hidden-mobile">NG Block Layout</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+              <!-- Comments -->
+              <article class="comments" id="comments" lazyload>
+                
+                  
+                
+                
+
+              </article>
+            
+          </article>
+        </div>
+      </div>
+    </div>
+    
+      <div class="d-none d-lg-block col-lg-2 toc-container" id="toc-ctn">
+        <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+      </div>
+    
+  </div>
+</div>
+
+<!-- Custom -->
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v"
+                 for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+
+    
+  </main>
+
+  <footer class="text-center mt-5 py-3">
+  <div class="footer-content">
+     <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+  </div>
+  
+  <div class="statistics">
+    
+    
+
+    
+      
+        <!-- 不蒜子统计PV -->
+        <span id="busuanzi_container_site_pv" style="display: none">
+            总访问量 
+            <span id="busuanzi_value_site_pv"></span>
+             次
+          </span>
+      
+      
+        <!-- 不蒜子统计UV -->
+        <span id="busuanzi_container_site_uv" style="display: none">
+            总访客数 
+            <span id="busuanzi_value_site_uv"></span>
+             人
+          </span>
+      
+    
+  </div>
+
+
+  
+
+  
+</footer>
+
+
+  <!-- SCRIPTS -->
+  
+  <script  src="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" ></script>
+<script  src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+<!-- Plugins -->
+
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+  
+
+
+
+  
+    <script  src="https://cdn.jsdelivr.net/npm/tocbot@4/dist/tocbot.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/anchor-js@4/anchor.min.js" ></script>
+  
+  
+    <script defer src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js" ></script>
+  
+
+
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+  <script  src="https://cdn.jsdelivr.net/npm/typed.js@2/lib/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var title = document.getElementById('subtitle').title;
+      
+        typing(title);
+      
+    })(window, document);
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+<!-- 主题的启动项 保持在最底部 -->
+<script  src="/js/boot.js" ></script>
+
+
+</body>
+</html>

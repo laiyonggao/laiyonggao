@@ -1,0 +1,550 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/touxiang.jpg">
+  <link rel="icon" href="/img/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Laiyonggao">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="本文主要讲解NG Inline排版流程和算法 一. 树之间的转换关系首先我们看下从Dom Tree转换成Fragment Tree的对应关系，排版结果就是一颗Fragment Tree（片段树）上面对应关系可以看出： 1.LayoutNGBlockFlow (div) → NGBlockNode (div)2.NGBlockNode的第一个子节点是 NGInlineNode （div）3.Inli">
+<meta property="og:type" content="article">
+<meta property="og:title" content="NG Inline Layout">
+<meta property="og:url" content="http://example.com/2022/05/04/NG-Inline-Layout/index.html">
+<meta property="og:site_name" content="赖勇高">
+<meta property="og:description" content="本文主要讲解NG Inline排版流程和算法 一. 树之间的转换关系首先我们看下从Dom Tree转换成Fragment Tree的对应关系，排版结果就是一颗Fragment Tree（片段树）上面对应关系可以看出： 1.LayoutNGBlockFlow (div) → NGBlockNode (div)2.NGBlockNode的第一个子节点是 NGInlineNode （div）3.Inli">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/2022/05/04/NG-Inline-Layout/1.jpg">
+<meta property="article:published_time" content="2022-05-04T09:22:48.000Z">
+<meta property="article:modified_time" content="2022-05-04T09:41:58.265Z">
+<meta property="article:author" content="Laiyonggao">
+<meta property="article:tag" content="NG">
+<meta property="article:tag" content="Layout">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="http://example.com/2022/05/04/NG-Inline-Layout/1.jpg">
+  
+  
+  <title>NG Inline Layout - 赖勇高</title>
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css" />
+
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4/github-markdown.min.css" />
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hint.css@2/hint.min.css" />
+
+  
+    
+    
+      
+      <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@10/styles/github-gist.min.css" />
+    
+  
+
+  
+    <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css" />
+  
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_ba1fz6golrf.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+<!-- 自定义样式保持在最底部 -->
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.8.14","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"right","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"copy_btn":true,"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  <header style="height: 70vh;">
+    <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>赖勇高</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div class="banner" id="banner" parallax=true
+         style="background: url('/img/default.png') no-repeat center center;
+           background-size: cover;">
+      <div class="full-bg-img">
+        <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+          <div class="page-header text-center fade-in-up">
+            <span class="h2" id="subtitle" title="NG Inline Layout">
+              
+            </span>
+
+            
+              <div class="mt-3">
+  
+  
+    <span class="post-meta">
+      <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+      <time datetime="2022-05-04 17:22" pubdate>
+        2022年5月4日 下午
+      </time>
+    </span>
+  
+</div>
+
+<div class="mt-1">
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-chart"></i>
+      2.3k 字
+    </span>
+  
+
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-clock-fill"></i>
+      
+      
+      20 分钟
+    </span>
+  
+
+  
+  
+</div>
+
+            
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="d-none d-lg-block col-lg-2"></div>
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div class="py-5" id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">NG Inline Layout</h1>
+            
+            <div class="markdown-body">
+              <p>本文主要讲解NG Inline排版流程和算法</p>
+<h2 id="一-树之间的转换关系"><a href="#一-树之间的转换关系" class="headerlink" title="一. 树之间的转换关系"></a>一. 树之间的转换关系</h2><p>首先我们看下从Dom Tree转换成Fragment Tree的对应关系，排版结果就是一颗Fragment Tree（片段树）<br><img src="/2022/05/04/NG-Inline-Layout/1.jpg" srcset="/img/loading.gif" lazyload><br>上面对应关系可以看出：</p>
+<p>1.LayoutNGBlockFlow (div) → NGBlockNode (div)<br>2.NGBlockNode的第一个子节点是 NGInlineNode （div）<br>3.Inline节点上有开闭节点的概念<br>4.每一行生成NGPhysicalLineBoxFragment（行片段）<br>5每一个文本片段生成一个NGPhysicalTextFragment （文本片段）</p>
+<h2 id="二-排版算法阶段"><a href="#二-排版算法阶段" class="headerlink" title="二. 排版算法阶段"></a>二. 排版算法阶段</h2><p>Ng Inline排版分为四个阶段：</p>
+<p>1.Pre-Layout 预处理排版阶段：主要是把节点下的所有文本组合起来和生成一系列的NGInlineItem列表<br>2.Line Breaking 分行，最终生成NGInlineItemResult<br>3.Line box construction 一行内容创建<br>4.Generate fragments生成 fragment的片段树</p>
+<table>
+<thead>
+<tr>
+<th align="center">阶段</th>
+<th align="center">输入</th>
+<th align="center">输出</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">Pre-layout</td>
+<td align="center">LayoutObject</td>
+<td align="center">NGInlineItem</td>
+</tr>
+<tr>
+<td align="center">Line Breaking</td>
+<td align="center">NGInlineItem</td>
+<td align="center">NGInlineItemResult</td>
+</tr>
+<tr>
+<td align="center">Line box construction</td>
+<td align="center">NGInlineItemResult</td>
+<td align="center">NGLogicalLineItem</td>
+</tr>
+<tr>
+<td align="center">Generate fragments</td>
+<td align="center">NGLogicalLineItem</td>
+<td align="center">NGPhysicalFragment &#x2F; NGFragmentItem</td>
+</tr>
+</tbody></table>
+<h3 id="1-Pre-Layout"><a href="#1-Pre-Layout" class="headerlink" title="1.Pre-Layout"></a>1.Pre-Layout</h3><p>这个主要是准备Inline布局的数据，触发函数是NGInlineNode::PrepareLayout()</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><div class="code-wrapper"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></div></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">NGInlineNode::PrepareLayout</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-comment">// Scan list of siblings collecting all in-flow non-atomic inlines. A single</span><br>  <span class="hljs-comment">// NGInlineNode represent a collection of adjacent non-atomic inlines.</span><br>  <span class="hljs-built_in">CollectInlines</span>();<br>  <span class="hljs-built_in">SegmentText</span>();<br>  <span class="hljs-built_in">ShapeText</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>CollectInlines：</p>
+<p>深度遍历NGInline节点，收集所有文本节点和其他非文本节点，然后输入到NGInlineItemsBuilder类进行创建出一系列的NGInlineItem。类似如下的结构</p>
+<figure class="highlight livecodeserver"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs livecodeserver">NGInlineNode （<span class="hljs-keyword">div</span>）<br>  NGInlineItem (<span class="hljs-built_in">open</span> tag, strong)<br>  NGInlineItem (<span class="hljs-keyword">text</span>, “NG”)<br>  NGInlineItem (<span class="hljs-built_in">close</span> tag, strong)<br></code></pre></td></tr></table></figure>
+<p>SegmentText：</p>
+<p>分割文本排版，采用bidi文本排版算法</p>
+<p>ShapeText：</p>
+<p>对分割的文本进行整形</p>
+<h3 id="2-Line-Breaking"><a href="#2-Line-Breaking" class="headerlink" title="2.Line Breaking"></a>2.Line Breaking</h3><p>NGLineBreaker 输入上步骤的NGInlineItem，然后会计算出多少行，以及为每一行创建一个NGInlineItemResult</p>
+<h3 id="3-Line-Box-Construction"><a href="#3-Line-Box-Construction" class="headerlink" title="3.Line Box Construction"></a>3.Line Box Construction</h3><p>通过NGInlineLayoutAlgorithm::CreateLine()函数触发，上步骤生成的NGInlineItemResult通过处理会生成NGLogicalLineItem.</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">NGInlineLayoutAlgorithm::CreateLine</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    NGLineInfo* line_info,</span></span><br><span class="hljs-params"><span class="hljs-function">    NGExclusionSpace* exclusion_space,</span></span><br><span class="hljs-params"><span class="hljs-function">    RefPtr&lt;NGInlineBreakToken&gt; break_token)</span> </span>&#123;<br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">Node</span>().<span class="hljs-built_in">IsBidiEnabled</span>())<br>    <span class="hljs-built_in">BidiReorder</span>(&amp;line_info-&gt;<span class="hljs-built_in">Results</span>());<br> <br>  <span class="hljs-keyword">if</span> (!<span class="hljs-built_in">PlaceItems</span>(line_info, *exclusion_space, break_token))<br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br> <br>  <span class="hljs-comment">// If something has resolved our BFC offset we can place all of the</span><br>  <span class="hljs-comment">// unpositioned floats below the current line.</span><br>  <span class="hljs-keyword">if</span> (container_builder_.<span class="hljs-built_in">BfcOffset</span>()) &#123;<br>    NGBfcOffset origin_point =<br>        <span class="hljs-built_in">GetOriginPointForFloats</span>(<span class="hljs-built_in">ContainerBfcOffset</span>(), content_size_);<br>    <span class="hljs-built_in">PositionPendingFloats</span>(<span class="hljs-built_in">ConstraintSpace</span>(), origin_point.block_offset,<br>                          &amp;container_builder_, &amp;unpositioned_floats_,<br>                          exclusion_space);<br>  &#125;<br> <br>  <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>&#125;<br><br></code></pre></td></tr></table></figure>
+<h3 id="4-Generate-Fragments"><a href="#4-Generate-Fragments" class="headerlink" title="4.Generate Fragments"></a>4.Generate Fragments</h3><p>所有的NGLogicalLineItems 被排序和定位后就会被转成fragment，转换方式如下：</p>
+<p>NGLogicalLineItem 会产生一个NGFragmentItem, 然后添加到 NGFragmentItems中</p>
+<p>到此NgInlineNode排版结束</p>
+<p>同步知乎：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/370626837">https://zhuanlan.zhihu.com/p/370626837</a></p>
+
+            </div>
+            <hr>
+            <div>
+              <div class="post-metas mb-3">
+                
+                  <div class="post-meta mr-3">
+                    <i class="iconfont icon-category"></i>
+                    
+                      <a class="hover-with-bg" href="/categories/Chromium/">Chromium</a>
+                    
+                  </div>
+                
+                
+                  <div class="post-meta">
+                    <i class="iconfont icon-tags"></i>
+                    
+                      <a class="hover-with-bg" href="/tags/NG/">NG</a>
+                    
+                      <a class="hover-with-bg" href="/tags/Layout/">Layout</a>
+                    
+                  </div>
+                
+              </div>
+              
+                <p class="note note-warning">
+                  
+                    本博客所有文章除特别声明外，均采用 <a target="_blank" href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh" rel="nofollow noopener noopener">CC BY-SA 4.0 协议</a> ，转载请注明出处！
+                  
+                </p>
+              
+              
+                <div class="post-prevnext">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/05/04/NG-Block-Layout/">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">NG Block Layout</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/05/04/V8%E6%8E%A5%E5%8F%A3%E6%8C%87%E5%8D%97-%E5%88%9B%E5%BB%BA%E5%BF%AB%E7%85%A7SnapshotCreator/">
+                        <span class="hidden-mobile">V8接口指南--创建快照SnapshotCreator</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+              <!-- Comments -->
+              <article class="comments" id="comments" lazyload>
+                
+                  
+                
+                
+
+              </article>
+            
+          </article>
+        </div>
+      </div>
+    </div>
+    
+      <div class="d-none d-lg-block col-lg-2 toc-container" id="toc-ctn">
+        <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+      </div>
+    
+  </div>
+</div>
+
+<!-- Custom -->
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v"
+                 for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+
+    
+  </main>
+
+  <footer class="text-center mt-5 py-3">
+  <div class="footer-content">
+     <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+  </div>
+  
+  <div class="statistics">
+    
+    
+
+    
+      
+        <!-- 不蒜子统计PV -->
+        <span id="busuanzi_container_site_pv" style="display: none">
+            总访问量 
+            <span id="busuanzi_value_site_pv"></span>
+             次
+          </span>
+      
+      
+        <!-- 不蒜子统计UV -->
+        <span id="busuanzi_container_site_uv" style="display: none">
+            总访客数 
+            <span id="busuanzi_value_site_uv"></span>
+             人
+          </span>
+      
+    
+  </div>
+
+
+  
+
+  
+</footer>
+
+
+  <!-- SCRIPTS -->
+  
+  <script  src="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" ></script>
+<script  src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+<!-- Plugins -->
+
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+  
+
+
+
+  
+    <script  src="https://cdn.jsdelivr.net/npm/tocbot@4/dist/tocbot.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/anchor-js@4/anchor.min.js" ></script>
+  
+  
+    <script defer src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js" ></script>
+  
+
+
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+  <script  src="https://cdn.jsdelivr.net/npm/typed.js@2/lib/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var title = document.getElementById('subtitle').title;
+      
+        typing(title);
+      
+    })(window, document);
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+<!-- 主题的启动项 保持在最底部 -->
+<script  src="/js/boot.js" ></script>
+
+
+</body>
+</html>

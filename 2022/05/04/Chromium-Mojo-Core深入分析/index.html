@@ -1,0 +1,581 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/touxiang.jpg">
+  <link rel="icon" href="/img/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Laiyonggao">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="本文是mojo源码的分析，需要对mojo有一定的基础知识 Mojo是什么？Mojom是chromium最新的跨平台进程通信框架 Mojo架构由官方架构图可知，mojom是分层设计： Mojo Core：内核层，主要是底层数据通信连接和消息编解码，C++代码实现 Mojo System API：Mojo接口层，1. 暴露给上层使用，例如MessagePipe，Message；2. 对接平台特殊接口">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Chromium Mojo Core深入分析">
+<meta property="og:url" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/index.html">
+<meta property="og:site_name" content="赖勇高">
+<meta property="og:description" content="本文是mojo源码的分析，需要对mojo有一定的基础知识 Mojo是什么？Mojom是chromium最新的跨平台进程通信框架 Mojo架构由官方架构图可知，mojom是分层设计： Mojo Core：内核层，主要是底层数据通信连接和消息编解码，C++代码实现 Mojo System API：Mojo接口层，1. 暴露给上层使用，例如MessagePipe，Message；2. 对接平台特殊接口">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/1.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/2.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/3.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/4.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/5.png">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/6.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/7.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/8.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/9.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/10.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/11.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/12.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/13.jpg">
+<meta property="article:published_time" content="2022-05-04T11:22:15.000Z">
+<meta property="article:modified_time" content="2022-05-04T11:40:20.044Z">
+<meta property="article:author" content="Laiyonggao">
+<meta property="article:tag" content="Mojo">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="http://example.com/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/1.jpg">
+  
+  
+  <title>Chromium Mojo Core深入分析 - 赖勇高</title>
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css" />
+
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4/github-markdown.min.css" />
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hint.css@2/hint.min.css" />
+
+  
+    
+    
+      
+      <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@10/styles/github-gist.min.css" />
+    
+  
+
+  
+    <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css" />
+  
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_ba1fz6golrf.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+<!-- 自定义样式保持在最底部 -->
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.8.14","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"right","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"copy_btn":true,"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  <header style="height: 70vh;">
+    <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>赖勇高</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div class="banner" id="banner" parallax=true
+         style="background: url('/img/default.png') no-repeat center center;
+           background-size: cover;">
+      <div class="full-bg-img">
+        <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+          <div class="page-header text-center fade-in-up">
+            <span class="h2" id="subtitle" title="Chromium Mojo Core深入分析">
+              
+            </span>
+
+            
+              <div class="mt-3">
+  
+  
+    <span class="post-meta">
+      <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+      <time datetime="2022-05-04 19:22" pubdate>
+        2022年5月4日 晚上
+      </time>
+    </span>
+  
+</div>
+
+<div class="mt-1">
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-chart"></i>
+      13k 字
+    </span>
+  
+
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-clock-fill"></i>
+      
+      
+      111 分钟
+    </span>
+  
+
+  
+  
+</div>
+
+            
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="d-none d-lg-block col-lg-2"></div>
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div class="py-5" id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">Chromium Mojo Core深入分析</h1>
+            
+            <div class="markdown-body">
+              <p>本文是mojo源码的分析，需要对mojo有一定的基础知识</p>
+<h2 id="Mojo是什么？"><a href="#Mojo是什么？" class="headerlink" title="Mojo是什么？"></a>Mojo是什么？</h2><p>Mojom是chromium最新的跨平台进程通信框架</p>
+<h2 id="Mojo架构"><a href="#Mojo架构" class="headerlink" title="Mojo架构"></a>Mojo架构</h2><p><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/1.jpg" srcset="/img/loading.gif" lazyload><br>由官方架构图可知，mojom是分层设计：</p>
+<p>Mojo Core：内核层，主要是底层数据通信连接和消息编解码，C++代码实现</p>
+<p>Mojo System API：Mojo接口层，1. 暴露给上层使用，例如MessagePipe，Message；2. 对接平台特殊接口</p>
+<p>Mojo System（C++&#x2F;Js&#x2F;Java）：Mojo 的语言包装层，Mojo C API 包装成多种语言。所以Mojo可以是个多语言使用的库</p>
+<p>Bindings：用于IDL语言生成包装，通过IDL可以生成接口通信，上层可以通过接口包装直接进行进程间通信，使用方式和函数调用无区别，极大的增加了代码的可读性</p>
+<h2 id="Mojo-Core底层结构"><a href="#Mojo-Core底层结构" class="headerlink" title="Mojo Core底层结构"></a>Mojo Core底层结构</h2><p><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/2.jpg" srcset="/img/loading.gif" lazyload><br>1.Core 为mojo的核心类，接口暴露给外部用，一个进程只对应一个Core，这个类管理成员NodeController和Handletable<br>2.MessagePipe是消息管道，保存了两个MessagePipeHandle，用于找到对应的MessagePipeDispatcher，每个mojo接口对应一个MessagePipe<br>3.MessagePipeDispatcher是每个mojo接口的消息处理类，MessagePipeDispatcher对应一个MessagePipeHandle<br>4.Handletable是用于存储MojoHanlde和MessagePipeDispatcher，MojoHanlde和MessagePipeDispatcher是一一对应关系，MojoHanlde是uint64_t数字<br>5.MessagePipeHandle实质上就是MojoHanlde<br>6.Node是相当于ip节点概念<br>7.Port相当于端口概念，每个mojo接口都有自己的Port，这样就可以方便进程间通信，可以寻找到应的接口处理<br>8.NodeController用于管理Node<br>9.Channel是进程建通信通道管理，每个平台有对应的实现，Linux对应的实现是ChannelPosix，主要是用于创建Unix Socket，用于进程间通信的消息读写等<br>10.SimpleWatcher用于监听Port消息<br>11.Connector用于读取和处理Port的消息队列事件</p>
+<h2 id="Core类"><a href="#Core类" class="headerlink" title="Core类"></a>Core类</h2><p><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/3.jpg" srcset="/img/loading.gif" lazyload><br>文件路径：mojo&#x2F;core&#x2F;core.h mojo&#x2F;core&#x2F;core.cc</p>
+<p>Core主要成员函数对外暴露的接口，主要的接口有创建消息管道，写消息，读消息等等</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><div class="code-wrapper"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></div></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">MOJO_SYSTEM_IMPL_EXPORT</span> Core &#123;<br>......<br><br>  <span class="hljs-comment">// These methods correspond to the API functions defined in</span><br>  <span class="hljs-comment">// &quot;mojo/public/c/system/message_pipe.h&quot;:</span><br>  <span class="hljs-function">MojoResult <span class="hljs-title">CreateMessagePipe</span><span class="hljs-params">(<span class="hljs-type">const</span> MojoCreateMessagePipeOptions* options,</span></span><br><span class="hljs-params"><span class="hljs-function">                               MojoHandle* message_pipe_handle0,</span></span><br><span class="hljs-params"><span class="hljs-function">                               MojoHandle* message_pipe_handle1)</span></span>;<br>  <span class="hljs-function">MojoResult <span class="hljs-title">WriteMessage</span><span class="hljs-params">(MojoHandle message_pipe_handle,</span></span><br><span class="hljs-params"><span class="hljs-function">                          MojoMessageHandle message_handle,</span></span><br><span class="hljs-params"><span class="hljs-function">                          <span class="hljs-type">const</span> MojoWriteMessageOptions* options)</span></span>;<br>  <span class="hljs-function">MojoResult <span class="hljs-title">ReadMessage</span><span class="hljs-params">(MojoHandle message_pipe_handle,</span></span><br><span class="hljs-params"><span class="hljs-function">                         <span class="hljs-type">const</span> MojoReadMessageOptions* options,</span></span><br><span class="hljs-params"><span class="hljs-function">                         MojoMessageHandle* message_handle)</span></span>;<br>  <span class="hljs-function">MojoResult <span class="hljs-title">FuseMessagePipes</span><span class="hljs-params">(MojoHandle handle0,</span></span><br><span class="hljs-params"><span class="hljs-function">                              MojoHandle handle1,</span></span><br><span class="hljs-params"><span class="hljs-function">                              <span class="hljs-type">const</span> MojoFuseMessagePipesOptions* options)</span></span>;<br>  <span class="hljs-function">MojoResult <span class="hljs-title">NotifyBadMessage</span><span class="hljs-params">(MojoMessageHandle message_handle,</span></span><br><span class="hljs-params"><span class="hljs-function">                              <span class="hljs-type">const</span> <span class="hljs-type">char</span>* error,</span></span><br><span class="hljs-params"><span class="hljs-function">                              <span class="hljs-type">size_t</span> error_num_bytes,</span></span><br><span class="hljs-params"><span class="hljs-function">                              <span class="hljs-type">const</span> MojoNotifyBadMessageOptions* options)</span></span>;<br>......<br><br> <span class="hljs-keyword">private</span>:<br>......<br><br>  <span class="hljs-comment">// This is lazily initialized on first access. Always use GetNodeController()</span><br>  <span class="hljs-comment">// to access it.</span><br>  std::unique_ptr&lt;NodeController&gt; node_controller_;<br><br>  <span class="hljs-comment">// The default callback to invoke, if any, when a process error is reported</span><br>  <span class="hljs-comment">// but cannot be associated with a specific process.</span><br>  ProcessErrorCallback default_process_error_callback_;<br><br>  std::unique_ptr&lt;HandleTable&gt; handles_;<br>......<br>&#125;;<br><br></code></pre></td></tr></table></figure>
+<p>如上代码可知，Core成员是NodeController和Handletable，所以一个进程中只有一份NodeController和Handletable</p>
+<h2 id="MessagePipe类"><a href="#MessagePipe类" class="headerlink" title="MessagePipe类"></a>MessagePipe类</h2><p><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/4.jpg" srcset="/img/loading.gif" lazyload><br>路径：mojo&#x2F;public&#x2F;cpp&#x2F;system&#x2F;message_pipe.h mojo&#x2F;public&#x2F;cpp&#x2F;system&#x2F;message_pipe.cc</p>
+<p>MessagsePipe类主要是存储了两个ScopedMessagePipeHandle handle，ScopedMessagePipeHandle是本质是MessagePipeHandle的包装，MessagePipeHandle是一个MojoHandle，MojoHandle就是一个uint64_t的id，这个主要就是用于查找MessagePipeDispatcher的。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">MessagePipe</span> &#123;<br> <span class="hljs-keyword">public</span>:<br>  <span class="hljs-built_in">MessagePipe</span>();<br>  <span class="hljs-function"><span class="hljs-keyword">explicit</span> <span class="hljs-title">MessagePipe</span><span class="hljs-params">(<span class="hljs-type">const</span> MojoCreateMessagePipeOptions&amp; options)</span></span>;<br>  ~<span class="hljs-built_in">MessagePipe</span>();<br><br>  ScopedMessagePipeHandle handle0;<br>  ScopedMessagePipeHandle handle1;<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>如上是MessagePipe的源代码</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">typedef</span> ScopedHandleBase&lt;MessagePipeHandle&gt; ScopedMessagePipeHandle;<br></code></pre></td></tr></table></figure>
+<p>如上是ScopedMessagePipeHandle的源码</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">MessagePipeHandle</span> : <span class="hljs-keyword">public</span> Handle &#123;<br> <span class="hljs-keyword">public</span>:<br>  <span class="hljs-built_in">MessagePipeHandle</span>() &#123;&#125;<br>  <span class="hljs-function"><span class="hljs-keyword">explicit</span> <span class="hljs-title">MessagePipeHandle</span><span class="hljs-params">(MojoHandle value)</span> : Handle(value) &#123;</span>&#125;<br><br>  <span class="hljs-comment">// Copying and assignment allowed.</span><br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>如上是MessagePipeHandle的代码，可以看出它的基类是Handle</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-comment">// Wrapper base class for |MojoHandle|.</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">Handle</span> &#123;<br>......<br> <span class="hljs-keyword">private</span>:<br>  MojoHandle value_;<br><br>  <span class="hljs-comment">// Copying and assignment allowed.</span><br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>如上可以知道Handle就是MojoHandle包装</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">typedef</span> <span class="hljs-type">uint64_t</span> MojoHandle;<br></code></pre></td></tr></table></figure>
+<p>MojoHandle就是一个uint64_t数字</p>
+<p>整体关系如下图：<br><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/5.png" srcset="/img/loading.gif" lazyload></p>
+<h2 id="Handletable类"><a href="#Handletable类" class="headerlink" title="Handletable类"></a>Handletable类</h2><p><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/6.jpg" srcset="/img/loading.gif" lazyload><br>路径：mojo&#x2F;core&#x2F;handle_table.h mojo&#x2F;core&#x2F;handle_table.cc</p>
+<p>Handletable主要是用于管理存储MojoHanlde和MessagePipeDispatcher（基类是Dispatcher），他们之间的对应关系是通过unordered_map存储的，key是MojoHanlde，value是MessagePipeDispatcher，每添加一个MessagePipeDispatcher就会绑定一个handle。MojoHanlde是通过next_available_handle_++得到的，这样可可以保证每个hanlde都是唯一的。</p>
+<p>可以查看HandleTable源码</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">MOJO_SYSTEM_IMPL_EXPORT</span> HandleTable<br>    : <span class="hljs-keyword">public</span> base::trace_event::MemoryDumpProvider &#123;<br>......<br>  <span class="hljs-keyword">struct</span> <span class="hljs-title class_">Entry</span> &#123;<br>    <span class="hljs-built_in">Entry</span>();<br>    <span class="hljs-function"><span class="hljs-keyword">explicit</span> <span class="hljs-title">Entry</span><span class="hljs-params">(scoped_refptr&lt;Dispatcher&gt; dispatcher)</span></span>;<br>    <span class="hljs-built_in">Entry</span>(<span class="hljs-type">const</span> Entry&amp; other);<br>    ~<span class="hljs-built_in">Entry</span>();<br><br>    scoped_refptr&lt;Dispatcher&gt; dispatcher;<br>    <span class="hljs-type">bool</span> busy = <span class="hljs-literal">false</span>;<br>  &#125;;<br><br>  <span class="hljs-keyword">using</span> HandleMap = std::unordered_map&lt;MojoHandle, Entry&gt;;<br><br>  HandleMap handles_;<br>  base::Lock lock_;<br><br>  <span class="hljs-type">uint64_t</span> next_available_handle_ = <span class="hljs-number">1</span>;<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>可以看到handles_就是一个 std::unordered_map&lt;MojoHandle, Entry&gt;，而Entry上是Dispatcher的包装。</p>
+<p>接下来我们看下MojoHandle的由来</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function">MojoHandle <span class="hljs-title">HandleTable::AddDispatcher</span><span class="hljs-params">(scoped_refptr&lt;Dispatcher&gt; dispatcher)</span> </span>&#123;<br>  <span class="hljs-comment">// Oops, we&#x27;re out of handles.</span><br>  <span class="hljs-keyword">if</span> (next_available_handle_ == MOJO_HANDLE_INVALID)<br>    <span class="hljs-keyword">return</span> MOJO_HANDLE_INVALID;<br><br>  MojoHandle handle = next_available_handle_++; <span class="hljs-comment">// j计算handle</span><br>  <span class="hljs-keyword">auto</span> result =<br>      handles_.<span class="hljs-built_in">insert</span>(std::<span class="hljs-built_in">make_pair</span>(handle, <span class="hljs-built_in">Entry</span>(std::<span class="hljs-built_in">move</span>(dispatcher)))); <span class="hljs-comment">// handle和dispatcher绑定到一起</span><br>  <span class="hljs-built_in">DCHECK</span>(result.second);<br><br>  <span class="hljs-keyword">return</span> handle;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>由上代码可以知道当AddDispatcher一个Dispatcher时候next_available_handle_++这样就得到了一个唯一的handle与dispatcher对应，然后插入到handles_中</p>
+<h2 id="MessagePipeDispatcher类"><a href="#MessagePipeDispatcher类" class="headerlink" title="MessagePipeDispatcher类"></a>MessagePipeDispatcher类</h2><p><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/7.jpg" srcset="/img/loading.gif" lazyload><br>路径：mojo&#x2F;core&#x2F;message_pipe_dispatcher.h mojo&#x2F;core&#x2F;message_pipe_dispatcher.cc</p>
+<p>MessagePipeDispatcher类是一个消息处理中间类，它的基类是Dispatcher。</p>
+<p>当Proxy端调用则通过调用MessagePipeDispatcher::WriteMessage函数通过NodeContorl发送消息给另一个进程</p>
+<p>当在Impl端则通过MessagePipeDispatcher::ReadMessage向Port读取消息队列读取消息，然后传给对应的mojo接口实现处理。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">MessagePipeDispatcher</span> : <span class="hljs-keyword">public</span> Dispatcher &#123;<br> <span class="hljs-keyword">public</span>:<br>.......<br>  <span class="hljs-comment">// Dispatcher:</span><br>  <span class="hljs-function">Type <span class="hljs-title">GetType</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> <span class="hljs-keyword">override</span></span>;<br>  <span class="hljs-function">MojoResult <span class="hljs-title">Close</span><span class="hljs-params">()</span> <span class="hljs-keyword">override</span></span>;<br>  <span class="hljs-function">MojoResult <span class="hljs-title">WriteMessage</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">      std::unique_ptr&lt;ports::UserMessageEvent&gt; message)</span> <span class="hljs-keyword">override</span></span>;<br>  <span class="hljs-function">MojoResult <span class="hljs-title">ReadMessage</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">      std::unique_ptr&lt;ports::UserMessageEvent&gt;* message)</span> <span class="hljs-keyword">override</span></span>;<br>.......<br><br> <span class="hljs-keyword">private</span>:<br>.......<br>  NodeController* <span class="hljs-type">const</span> node_controller_;<br>  <span class="hljs-type">const</span> ports::PortRef port_;<br>  <span class="hljs-type">const</span> <span class="hljs-type">uint64_t</span> pipe_id_; <span class="hljs-comment">// 一个随机值</span><br>  <span class="hljs-type">const</span> <span class="hljs-type">int</span> endpoint_; <span class="hljs-comment">// 0或者1</span><br>.......<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>可以看MessagePipeDispatcher中存储了NodeController和PortRef。PortRef是存储消息对应的Port和PortName，主要用于读取对应的Port的消息队列。如下源码：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-keyword">class</span> <span class="hljs-title">COMPONENT_EXPORT</span><span class="hljs-params">(MOJO_CORE_PORTS)</span> PortRef </span>&#123;<br> <span class="hljs-keyword">public</span>:<br>  ~<span class="hljs-built_in">PortRef</span>();<br>  <span class="hljs-built_in">PortRef</span>();<br>  <span class="hljs-built_in">PortRef</span>(<span class="hljs-type">const</span> PortName&amp; name, scoped_refptr&lt;Port&gt; port);<br><br>  <span class="hljs-built_in">PortRef</span>(<span class="hljs-type">const</span> PortRef&amp; other);<br>  <span class="hljs-built_in">PortRef</span>(PortRef&amp;&amp; other);<br><br>  PortRef&amp; <span class="hljs-keyword">operator</span>=(<span class="hljs-type">const</span> PortRef&amp; other);<br>  PortRef&amp; <span class="hljs-keyword">operator</span>=(PortRef&amp;&amp; other);<br><br>  <span class="hljs-function"><span class="hljs-type">const</span> PortName&amp; <span class="hljs-title">name</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>&#123; <span class="hljs-keyword">return</span> name_; &#125;<br><br>  <span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">is_valid</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>&#123; <span class="hljs-keyword">return</span> !!port_; &#125;<br><br> <span class="hljs-keyword">private</span>:<br>  <span class="hljs-keyword">friend</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">PortLocker</span>;<br><br>  <span class="hljs-function">Port* <span class="hljs-title">port</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>&#123; <span class="hljs-keyword">return</span> port_.<span class="hljs-built_in">get</span>(); &#125;<br><br>  PortName name_; <span class="hljs-comment">// port的name</span><br>  scoped_refptr&lt;Port&gt; port_;<span class="hljs-comment">// port的指针</span><br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>1.Proxy端消息发送主要的调用函数MessagePipeDispatcher::WriteMessage</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function">MojoResult <span class="hljs-title">MessagePipeDispatcher::WriteMessage</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    std::unique_ptr&lt;ports::UserMessageEvent&gt; message)</span> </span>&#123;<br>  <span class="hljs-keyword">if</span> (port_closed_ || in_transit_)<br>    <span class="hljs-keyword">return</span> MOJO_RESULT_INVALID_ARGUMENT;<br><br>  <span class="hljs-type">int</span> rv = node_controller_-&gt;<span class="hljs-built_in">SendUserMessage</span>(port_, std::<span class="hljs-built_in">move</span>(message));<br>......<br>  <span class="hljs-keyword">return</span> MOJO_RESULT_OK;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>如上代码主要是通过node_controller_-&gt;SendUserMessage把message发送给另一个进程，然后可以看到会把port带上，这样就可以发送给另一个进程对应的mojo impl处理。</p>
+<p>2.Impl端读取消息主要的调用函数MessagePipeDispatcher::ReadMessage</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function">MojoResult <span class="hljs-title">MessagePipeDispatcher::ReadMessage</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    std::unique_ptr&lt;ports::UserMessageEvent&gt;* message)</span> </span>&#123;<br>  <span class="hljs-comment">// We can&#x27;t read from a port that&#x27;s closed or in transit!</span><br>  <span class="hljs-keyword">if</span> (port_closed_ || in_transit_)<br>    <span class="hljs-keyword">return</span> MOJO_RESULT_INVALID_ARGUMENT;<br><br>  <span class="hljs-type">int</span> rv = node_controller_-&gt;<span class="hljs-built_in">node</span>()-&gt;<span class="hljs-built_in">GetMessage</span>(port_, message, <span class="hljs-literal">nullptr</span>);<br>......<br>  <span class="hljs-keyword">return</span> MOJO_RESULT_OK;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>如上代码，则可以知道消息读取的时候是通过node_controller_-&gt;node()-&gt;GetMessage上读取的，本质上就是读取port里面的消息队列</p>
+<h2 id="Node类"><a href="#Node类" class="headerlink" title="Node类"></a>Node类</h2><p>路径：mojo&#x2F;core&#x2F;ports&#x2F;node.h mojo&#x2F;core&#x2F;ports&#x2F;node.cc</p>
+<p>相当于ip的概念，管理着port端口，在每个进程中只有一个node，但是可以多个port端口，因为在进程中肯定不止一个mojo接口，那怎么去区分接口呢？那就是通过port概念区分。<br><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/8.jpg" srcset="/img/loading.gif" lazyload><br>Node管理着PortName和Port，PortName和Port存储的数据结构是unordered_map。如下代码</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-keyword">class</span> <span class="hljs-title">COMPONENT_EXPORT</span><span class="hljs-params">(MOJO_CORE_PORTS)</span> Node </span>&#123;<br>......<br>  <span class="hljs-type">const</span> NodeName name_;<br>  <span class="hljs-type">const</span> DelegateHolder delegate_;<br><br>  <span class="hljs-comment">// Just to clarify readability of the types below.</span><br>  <span class="hljs-keyword">using</span> LocalPortName = PortName;<br>  <span class="hljs-keyword">using</span> PeerPortName = PortName;<br><br>  <span class="hljs-comment">// Guards access to |ports_| and |peer_port_maps_| below.</span><br>  <span class="hljs-comment">//</span><br>  <span class="hljs-comment">// This must never be acquired while an individual port&#x27;s lock is held on the</span><br>  <span class="hljs-comment">// same thread. Conversely, individual port locks may be acquired while this</span><br>  <span class="hljs-comment">// one is held.</span><br>  <span class="hljs-comment">//</span><br>  <span class="hljs-comment">// Because UserMessage events may execute arbitrary user code during</span><br>  <span class="hljs-comment">// destruction, it is also important to ensure that such events are never</span><br>  <span class="hljs-comment">// destroyed while this (or any individual Port) lock is held.</span><br>  base::Lock ports_lock_;<br>  std::unordered_map&lt;LocalPortName, scoped_refptr&lt;Port&gt;&gt; ports_;<br>......<br>&#125;;<br></code></pre></td></tr></table></figure>
+<h2 id="Port类"><a href="#Port类" class="headerlink" title="Port类"></a>Port类</h2><p>路径：mojo&#x2F;core&#x2F;ports&#x2F;port.h mojo&#x2F;core&#x2F;ports&#x2F;port.cc<br><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/9.jpg" srcset="/img/loading.gif" lazyload><br>port主要是存储消息队列的，当进程1的接口向进程2发送一个消息，则进程2的会从底层Socket读取到消息存在port的MessageQueue队列中，然后等待node读取进行处理。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">Port</span> : <span class="hljs-keyword">public</span> base::RefCountedThreadSafe&lt;Port&gt; &#123;<br>......<br>  <span class="hljs-comment">// The queue of incoming user messages received by this Port. Only non-empty</span><br>  <span class="hljs-comment">// for buffering or receiving Ports. When a buffering port enters the proxying</span><br>  <span class="hljs-comment">// state, it flushes its queue and the proxy then bypasses the queue</span><br>  <span class="hljs-comment">// indefinitely.</span><br>  <span class="hljs-comment">//</span><br>  <span class="hljs-comment">// A receiving port&#x27;s queue only has elements removed by user code reading</span><br>  <span class="hljs-comment">// messages from the port.</span><br>  <span class="hljs-comment">//</span><br>  <span class="hljs-comment">// Note that this is a priority queue which only exposes messages to consumers</span><br>  <span class="hljs-comment">// in strict sequential order.</span><br>  MessageQueue message_queue;<br>......<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>如上MessageQueue就是消息队列</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-keyword">class</span> <span class="hljs-title">COMPONENT_EXPORT</span><span class="hljs-params">(MOJO_CORE_PORTS)</span> MessageQueue </span>&#123;<br>......<br> <span class="hljs-keyword">private</span>:<br>  std::vector&lt;std::unique_ptr&lt;UserMessageEvent&gt;&gt; heap_;<br>  <span class="hljs-type">uint64_t</span> next_sequence_num_;<br>  <span class="hljs-type">bool</span> signalable_ = <span class="hljs-literal">true</span>;<br>  <span class="hljs-type">size_t</span> total_queued_bytes_ = <span class="hljs-number">0</span>;<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>如上源码可以看出UserMessageEvent是存储的为一个vector数组结构。</p>
+<h2 id="ChannelPosix类"><a href="#ChannelPosix类" class="headerlink" title="ChannelPosix类"></a>ChannelPosix类</h2><p>路径：mojo&#x2F;core&#x2F;channel_posix.h mojo&#x2F;core&#x2F;channel_posix.cc</p>
+<p>用于保存进程间通道fd句柄，最底层的消息读取，消息发送。不同的平台有差异，Linux平台是采用Unix Socket跨进程通信的，实现类是ChannelPosix。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">ChannelPosix</span> : <span class="hljs-keyword">public</span> Channel,<br>                     <span class="hljs-keyword">public</span> base::CurrentThread::DestructionObserver,<br>                     <span class="hljs-keyword">public</span> base::MessagePumpForIO::FdWatcher &#123;<br> <span class="hljs-keyword">public</span>:<br>  <span class="hljs-built_in">ChannelPosix</span>(Delegate* delegate,<br>               ConnectionParams connection_params,<br>               HandlePolicy handle_policy,<br>               scoped_refptr&lt;base::SingleThreadTaskRunner&gt; io_task_runner);<br><br>  <span class="hljs-built_in">ChannelPosix</span>(<span class="hljs-type">const</span> ChannelPosix&amp;) = <span class="hljs-keyword">delete</span>;<br>  ChannelPosix&amp; <span class="hljs-keyword">operator</span>=(<span class="hljs-type">const</span> ChannelPosix&amp;) = <span class="hljs-keyword">delete</span>;<br><br>  <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">Start</span><span class="hljs-params">()</span> <span class="hljs-keyword">override</span></span>;<br>  <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">ShutDownImpl</span><span class="hljs-params">()</span> <span class="hljs-keyword">override</span></span>;<br>  <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">Write</span><span class="hljs-params">(MessagePtr message)</span> <span class="hljs-keyword">override</span></span>; <span class="hljs-comment">// 消息发送</span><br>  <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">LeakHandle</span><span class="hljs-params">()</span> <span class="hljs-keyword">override</span></span>;<br>  <span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">GetReadPlatformHandles</span><span class="hljs-params">(<span class="hljs-type">const</span> <span class="hljs-type">void</span>* payload,</span></span><br><span class="hljs-params"><span class="hljs-function">                              <span class="hljs-type">size_t</span> payload_size,</span></span><br><span class="hljs-params"><span class="hljs-function">                              <span class="hljs-type">size_t</span> num_handles,</span></span><br><span class="hljs-params"><span class="hljs-function">                              <span class="hljs-type">const</span> <span class="hljs-type">void</span>* extra_header,</span></span><br><span class="hljs-params"><span class="hljs-function">                              <span class="hljs-type">size_t</span> extra_header_size,</span></span><br><span class="hljs-params"><span class="hljs-function">                              std::vector&lt;PlatformHandle&gt;* handles,</span></span><br><span class="hljs-params"><span class="hljs-function">                              <span class="hljs-type">bool</span>* deferred)</span> <span class="hljs-keyword">override</span></span>;<br>  <span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">OnControlMessage</span><span class="hljs-params">(Message::MessageType message_type,</span></span><br><span class="hljs-params"><span class="hljs-function">                        <span class="hljs-type">const</span> <span class="hljs-type">void</span>* payload,</span></span><br><span class="hljs-params"><span class="hljs-function">                        <span class="hljs-type">size_t</span> payload_size,</span></span><br><span class="hljs-params"><span class="hljs-function">                        std::vector&lt;PlatformHandle&gt; handles)</span> <span class="hljs-keyword">override</span></span>;<br>......<br> <span class="hljs-keyword">private</span>:<br>......<br>  <span class="hljs-comment">// We may be initialized with a server socket, in which case this will be</span><br>  <span class="hljs-comment">// valid until it accepts an incoming connection.</span><br>  PlatformChannelServerEndpoint server_;<br><br>  <span class="hljs-comment">// The socket over which to communicate. May be passed in at construction time</span><br>  <span class="hljs-comment">// or accepted over |server_|.</span><br>  base::ScopedFD socket_;<span class="hljs-comment">// fd句柄</span><br><br>  <span class="hljs-comment">// These watchers must only be accessed on the IO thread.</span><br>  std::unique_ptr&lt;base::MessagePumpForIO::FdWatchController&gt; read_watcher_;<br>  std::unique_ptr&lt;base::MessagePumpForIO::FdWatchController&gt; write_watcher_;<br>.......<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>如上socket_就是socket的fd通信句柄。那创建fd是在哪里呢？<br>1.PlatformChannel是用于创建fd的地方（mojo&#x2F;public&#x2F;cpp&#x2F;platform&#x2F;platform_channel.cc）</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">CreateChannel</span><span class="hljs-params">(PlatformHandle* local_endpoint,</span></span><br><span class="hljs-params"><span class="hljs-function">                   PlatformHandle* remote_endpoint)</span> </span>&#123;<br>  <span class="hljs-type">int</span> fds[<span class="hljs-number">2</span>];<br><span class="hljs-meta">#<span class="hljs-keyword">if</span> BUILDFLAG(IS_NACL)</span><br>  <span class="hljs-built_in">PCHECK</span>(<span class="hljs-built_in">imc_socketpair</span>(fds) == <span class="hljs-number">0</span>);<br><span class="hljs-meta">#<span class="hljs-keyword">else</span></span><br>  <span class="hljs-built_in">PCHECK</span>(<span class="hljs-built_in">socketpair</span>(AF_UNIX, SOCK_STREAM, <span class="hljs-number">0</span>, fds) == <span class="hljs-number">0</span>);<br><br>  <span class="hljs-comment">// Set non-blocking on both ends.</span><br>  <span class="hljs-built_in">PCHECK</span>(<span class="hljs-built_in">fcntl</span>(fds[<span class="hljs-number">0</span>], F_SETFL, O_NONBLOCK) == <span class="hljs-number">0</span>);<br>  <span class="hljs-built_in">PCHECK</span>(<span class="hljs-built_in">fcntl</span>(fds[<span class="hljs-number">1</span>], F_SETFL, O_NONBLOCK) == <span class="hljs-number">0</span>);<br><br><span class="hljs-meta">#<span class="hljs-keyword">if</span> BUILDFLAG(IS_APPLE)</span><br>  <span class="hljs-comment">// This turns off |SIGPIPE| when writing to a closed socket, causing the call</span><br>  <span class="hljs-comment">// to fail with |EPIPE| instead. On Linux we have to use |send...()| with</span><br>  <span class="hljs-comment">// |MSG_NOSIGNAL| instead, which is not supported on Mac.</span><br>  <span class="hljs-type">int</span> no_sigpipe = <span class="hljs-number">1</span>;<br>  <span class="hljs-built_in">PCHECK</span>(<span class="hljs-built_in">setsockopt</span>(fds[<span class="hljs-number">0</span>], SOL_SOCKET, SO_NOSIGPIPE, &amp;no_sigpipe,<br>                    <span class="hljs-built_in">sizeof</span>(no_sigpipe)) == <span class="hljs-number">0</span>);<br>  <span class="hljs-built_in">PCHECK</span>(<span class="hljs-built_in">setsockopt</span>(fds[<span class="hljs-number">1</span>], SOL_SOCKET, SO_NOSIGPIPE, &amp;no_sigpipe,<br>                    <span class="hljs-built_in">sizeof</span>(no_sigpipe)) == <span class="hljs-number">0</span>);<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span>  <span class="hljs-comment">// BUILDFLAG(IS_APPLE)</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span>  <span class="hljs-comment">// BUILDFLAG(IS_NACL)</span></span><br><br>  *local_endpoint = <span class="hljs-built_in">PlatformHandle</span>(base::<span class="hljs-built_in">ScopedFD</span>(fds[<span class="hljs-number">0</span>]));<br>  *remote_endpoint = <span class="hljs-built_in">PlatformHandle</span>(base::<span class="hljs-built_in">ScopedFD</span>(fds[<span class="hljs-number">1</span>]));<br>  <span class="hljs-built_in">DCHECK</span>(local_endpoint-&gt;<span class="hljs-built_in">is_valid</span>());<br>  <span class="hljs-built_in">DCHECK</span>(remote_endpoint-&gt;<span class="hljs-built_in">is_valid</span>());<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>如上代码CreateChannel就是用于创建fd通信句柄的函数，主要是调用系统的socketpair创建。</p>
+<p>2.ChannelPosix::WriteNoLock函数用于发送消息，最终是调用send发送消息</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">ssize_t</span> <span class="hljs-title">SocketWrite</span><span class="hljs-params">(base::PlatformFile socket,</span></span><br><span class="hljs-params"><span class="hljs-function">                    <span class="hljs-type">const</span> <span class="hljs-type">void</span>* bytes,</span></span><br><span class="hljs-params"><span class="hljs-function">                    <span class="hljs-type">size_t</span> num_bytes)</span> </span>&#123;<br><span class="hljs-meta">#<span class="hljs-keyword">if</span> BUILDFLAG(IS_APPLE)</span><br>  <span class="hljs-keyword">return</span> <span class="hljs-built_in">HANDLE_EINTR</span>(<span class="hljs-built_in">write</span>(socket, bytes, num_bytes));<br><span class="hljs-meta">#<span class="hljs-keyword">else</span></span><br>  <span class="hljs-keyword">return</span> <span class="hljs-built_in">send</span>(socket, bytes, num_bytes, kSendmsgFlags);<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br>&#125;<br></code></pre></td></tr></table></figure>
+<p>3.ChannelPosix::OnFileCanReadWithoutBlocking用于读取消息，最终读取到port消息队列中</p>
+<h2 id="Mojo消息发送流程"><a href="#Mojo消息发送流程" class="headerlink" title="Mojo消息发送流程"></a>Mojo消息发送流程</h2><p><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/10.jpg" srcset="/img/loading.gif" lazyload><br>上图就是在Proxy端调用mojo接口，到系统底层发送给另一进程的主要流程图。注意图中Endpoint和MultiplexRouter::InterfaceEndpoint的基类是InterfaceEndpointController，他们区别是Endpoint是用于非关联接口的，而MultiplexRouter::InterfaceEndpoint用于关联接口的</p>
+<h2 id="Mojo消息读取处理流程"><a href="#Mojo消息读取处理流程" class="headerlink" title="Mojo消息读取处理流程"></a>Mojo消息读取处理流程</h2><p><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/11.jpg" srcset="/img/loading.gif" lazyload><br>上图就是mojo的接口Impl消息处理流程图，这里要注意异步关系，消息是先从socket读取到port消息队列中，然后SimpleWatcher监听到有port有消息需要处理，则进行处理，所以读消息和处理消息不是在一个任务中。如果消息携带需要创建其他接口Handle，则调用ExtractSerializedHandles最终创建一个MessagePipeDispatcher</p>
+<h2 id="Mojo-接口内部类关系"><a href="#Mojo-接口内部类关系" class="headerlink" title="Mojo 接口内部类关系"></a>Mojo 接口内部类关系</h2><p>假设有3个进程，有3个mojo接口，他们之间相互通信，那Mojo Core内部的对应关系是怎么样的？</p>
+<p>A接口，在进程1中创建，作用是和进程3通信</p>
+<p>B接口，在进程2中创建，作用是和进程1通信</p>
+<p>C接口，在进程3中创建，作用是和进程2通信<br><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/12.jpg" srcset="/img/loading.gif" lazyload><br>通过这3个进程和3个mojo接口，我们看下mojo core内部对应的结构<br><img src="/2022/05/04/Chromium-Mojo-Core%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/13.jpg" srcset="/img/loading.gif" lazyload><br>解释：</p>
+<p>1.从上面可以看出每个mojo接口有进程发送的Proxy端，实现端是Impl端<br>2.每个mojo接口对一一对应一个InterfaceEndPointClient和InterfaceEnd<br>3.在Proxy端对应两个MessagePipeDispatcher消息处理，这个是存储在HanldeTable中<br>4.每个MessagePipeDispatcher会对应一个port（端口），端口会对应一个port_name<br>5.一个进程只有一个Node<br>6.一个进程只有一个NodeController<br>7.假如进程1和2,3进程通信，则在进程1中会有对相应2，3的NodeChannel和ChannelPosix（Linux平台），Socket fd</p>
+<p>以上有错误，请多多指教</p>
+<p>同步知乎：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/426069459">https://zhuanlan.zhihu.com/p/426069459</a></p>
+
+            </div>
+            <hr>
+            <div>
+              <div class="post-metas mb-3">
+                
+                  <div class="post-meta mr-3">
+                    <i class="iconfont icon-category"></i>
+                    
+                      <a class="hover-with-bg" href="/categories/Chromium/">Chromium</a>
+                    
+                  </div>
+                
+                
+                  <div class="post-meta">
+                    <i class="iconfont icon-tags"></i>
+                    
+                      <a class="hover-with-bg" href="/tags/Mojo/">Mojo</a>
+                    
+                  </div>
+                
+              </div>
+              
+                <p class="note note-warning">
+                  
+                    本博客所有文章除特别声明外，均采用 <a target="_blank" href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh" rel="nofollow noopener noopener">CC BY-SA 4.0 协议</a> ，转载请注明出处！
+                  
+                </p>
+              
+              
+                <div class="post-prevnext">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/05/04/Chromium-IPC-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90%EF%BC%88%E5%9F%BA%E4%BA%8EMojo%EF%BC%89/">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">Chromium IPC 深入分析（基于Mojo）</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/05/04/V8-CreateObjectLiteral%E5%AD%97%E8%8A%82%E7%A0%81%E5%A4%84%E7%90%86%E7%A8%8B%E5%BA%8F/">
+                        <span class="hidden-mobile">V8 CreateObjectLiteral字节码处理程序</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+              <!-- Comments -->
+              <article class="comments" id="comments" lazyload>
+                
+                  
+                
+                
+
+              </article>
+            
+          </article>
+        </div>
+      </div>
+    </div>
+    
+      <div class="d-none d-lg-block col-lg-2 toc-container" id="toc-ctn">
+        <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+      </div>
+    
+  </div>
+</div>
+
+<!-- Custom -->
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v"
+                 for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+
+    
+  </main>
+
+  <footer class="text-center mt-5 py-3">
+  <div class="footer-content">
+     <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+  </div>
+  
+  <div class="statistics">
+    
+    
+
+    
+      
+        <!-- 不蒜子统计PV -->
+        <span id="busuanzi_container_site_pv" style="display: none">
+            总访问量 
+            <span id="busuanzi_value_site_pv"></span>
+             次
+          </span>
+      
+      
+        <!-- 不蒜子统计UV -->
+        <span id="busuanzi_container_site_uv" style="display: none">
+            总访客数 
+            <span id="busuanzi_value_site_uv"></span>
+             人
+          </span>
+      
+    
+  </div>
+
+
+  
+
+  
+</footer>
+
+
+  <!-- SCRIPTS -->
+  
+  <script  src="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" ></script>
+<script  src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+<!-- Plugins -->
+
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+  
+
+
+
+  
+    <script  src="https://cdn.jsdelivr.net/npm/tocbot@4/dist/tocbot.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/anchor-js@4/anchor.min.js" ></script>
+  
+  
+    <script defer src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js" ></script>
+  
+
+
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+  <script  src="https://cdn.jsdelivr.net/npm/typed.js@2/lib/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var title = document.getElementById('subtitle').title;
+      
+        typing(title);
+      
+    })(window, document);
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+<!-- 主题的启动项 保持在最底部 -->
+<script  src="/js/boot.js" ></script>
+
+
+</body>
+</html>

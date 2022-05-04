@@ -1,0 +1,544 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/touxiang.jpg">
+  <link rel="icon" href="/img/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Laiyonggao">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="前言最近看了下V8 binding相关的技术文档，主要是学习下chrome如何使用V8的isolate和context，所以就看了下英文文档，顺便翻译一下。英文文档链接https:&#x2F;&#x2F;chromium.googlesource.com&#x2F;chromium&#x2F;src&#x2F;+&#x2F;master&#x2F;third_party&#x2F;blink&#x2F;renderer&#x2F;bindings&#x2F;core&#x2F;v8&#x2F;V8BindingDesign.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="V8 bindings 设计isolate，context，world，frame之间的关系（翻译）">
+<meta property="og:url" content="http://example.com/2022/05/04/V8-bindings-%E8%AE%BE%E8%AE%A1isolate%EF%BC%8Ccontext%EF%BC%8Cworld%EF%BC%8Cframe%E4%B9%8B%E9%97%B4%E7%9A%84%E5%85%B3%E7%B3%BB%EF%BC%88%E7%BF%BB%E8%AF%91%EF%BC%89/index.html">
+<meta property="og:site_name" content="赖勇高">
+<meta property="og:description" content="前言最近看了下V8 binding相关的技术文档，主要是学习下chrome如何使用V8的isolate和context，所以就看了下英文文档，顺便翻译一下。英文文档链接https:&#x2F;&#x2F;chromium.googlesource.com&#x2F;chromium&#x2F;src&#x2F;+&#x2F;master&#x2F;third_party&#x2F;blink&#x2F;renderer&#x2F;bindings&#x2F;core&#x2F;v8&#x2F;V8BindingDesign.">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/2022/05/04/V8-bindings-%E8%AE%BE%E8%AE%A1isolate%EF%BC%8Ccontext%EF%BC%8Cworld%EF%BC%8Cframe%E4%B9%8B%E9%97%B4%E7%9A%84%E5%85%B3%E7%B3%BB%EF%BC%88%E7%BF%BB%E8%AF%91%EF%BC%89/world%E5%85%B3%E7%B3%BB%E5%9B%BE.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/V8-bindings-%E8%AE%BE%E8%AE%A1isolate%EF%BC%8Ccontext%EF%BC%8Cworld%EF%BC%8Cframe%E4%B9%8B%E9%97%B4%E7%9A%84%E5%85%B3%E7%B3%BB%EF%BC%88%E7%BF%BB%E8%AF%91%EF%BC%89/frame-Context-world.jpg">
+<meta property="article:published_time" content="2022-05-04T07:19:00.000Z">
+<meta property="article:modified_time" content="2022-05-04T07:29:36.855Z">
+<meta property="article:author" content="Laiyonggao">
+<meta property="article:tag" content="Isolate，">
+<meta property="article:tag" content="Context">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="http://example.com/2022/05/04/V8-bindings-%E8%AE%BE%E8%AE%A1isolate%EF%BC%8Ccontext%EF%BC%8Cworld%EF%BC%8Cframe%E4%B9%8B%E9%97%B4%E7%9A%84%E5%85%B3%E7%B3%BB%EF%BC%88%E7%BF%BB%E8%AF%91%EF%BC%89/world%E5%85%B3%E7%B3%BB%E5%9B%BE.jpg">
+  
+  
+  <title>V8 bindings 设计isolate，context，world，frame之间的关系（翻译） - 赖勇高</title>
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css" />
+
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4/github-markdown.min.css" />
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hint.css@2/hint.min.css" />
+
+  
+    
+    
+      
+      <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@10/styles/github-gist.min.css" />
+    
+  
+
+  
+    <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css" />
+  
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_ba1fz6golrf.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+<!-- 自定义样式保持在最底部 -->
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.8.14","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"right","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"copy_btn":true,"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  <header style="height: 70vh;">
+    <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>赖勇高</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div class="banner" id="banner" parallax=true
+         style="background: url('/img/default.png') no-repeat center center;
+           background-size: cover;">
+      <div class="full-bg-img">
+        <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+          <div class="page-header text-center fade-in-up">
+            <span class="h2" id="subtitle" title="V8 bindings 设计isolate，context，world，frame之间的关系（翻译）">
+              
+            </span>
+
+            
+              <div class="mt-3">
+  
+  
+    <span class="post-meta">
+      <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+      <time datetime="2022-05-04 15:19" pubdate>
+        2022年5月4日 下午
+      </time>
+    </span>
+  
+</div>
+
+<div class="mt-1">
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-chart"></i>
+      5.5k 字
+    </span>
+  
+
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-clock-fill"></i>
+      
+      
+      47 分钟
+    </span>
+  
+
+  
+  
+</div>
+
+            
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="d-none d-lg-block col-lg-2"></div>
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div class="py-5" id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">V8 bindings 设计isolate，context，world，frame之间的关系（翻译）</h1>
+            
+            <div class="markdown-body">
+              <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>最近看了下V8 binding相关的技术文档，主要是学习下chrome如何使用V8的isolate和context，所以就看了下英文文档，顺便翻译一下。英文文档链接<a target="_blank" rel="noopener" href="https://chromium.googlesource.com/chromium/src/+/master/third_party/blink/renderer/bindings/core/v8/V8BindingDesign.md">https://chromium.googlesource.com/chromium/src/+/master/third_party/blink/renderer/bindings/core/v8/V8BindingDesign.md</a><br>这篇文章主要讲解V8 binding层的架构的几个关键概念，除了DOM wrappers的生命管理周期</p>
+<h2 id="目录"><a href="#目录" class="headerlink" title="目录"></a>目录</h2><p>1.isolate （隔离）<br>2.Context （上下文）<br>3.Entered context and current context（ 输入上下文和当前上下文）<br>4.World<br>5.A relationship between isolates, contexts, worlds and frames<br>6.DOM wrappers and worlds<br>7.DOM wrappers and contexts</p>
+<h2 id="isolate-（隔离）"><a href="#isolate-（隔离）" class="headerlink" title="isolate （隔离）"></a>isolate （隔离）</h2><p>在V8中一个isolate是V8的一份实例。在blink中isolate和线程是1:1的关系。主线程与一个isolate相关联，一个工作线程与一个隔离相关联，但是也有个例外compositor worker是多个共享一个isolate</p>
+<h2 id="Context-上下文"><a href="#Context-上下文" class="headerlink" title="Context 上下文"></a>Context 上下文</h2><p>Context是V8中全局变量范围的概念。简单的说，一个Window对象对应于一个Context。例如&lt;iframe&gt;和parent frame的有不同的Window对象，所以不同的frame具有不同的Context。由于每个Context创建了自己的全局变量和作用域，因此&lt;iframe&gt;的全局变量和原型链与parent frame的全局变量和原型链是隔离的<br>例子：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><div class="code-wrapper"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></div></td><td class="code"><pre><code class="hljs html">// main.html<br><span class="hljs-tag">&lt;<span class="hljs-name">html</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">body</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">iframe</span> <span class="hljs-attr">src</span>=<span class="hljs-string">&quot;iframe.html&quot;</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">iframe</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">script</span>&gt;</span><span class="language-javascript"></span><br><span class="language-javascript"><span class="hljs-keyword">var</span> foo = <span class="hljs-number">1234</span>;</span><br><span class="language-javascript"><span class="hljs-title class_">String</span>.<span class="hljs-property"><span class="hljs-keyword">prototype</span></span>.<span class="hljs-property">substr</span> =</span><br><span class="language-javascript">    <span class="hljs-keyword">function</span> (<span class="hljs-params">position, length</span>) &#123; <span class="hljs-comment">// Hijacks String.prototype.substr</span></span><br><span class="language-javascript">        <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(length);</span><br><span class="language-javascript">        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;hijacked&quot;</span>;</span><br><span class="language-javascript">    &#125;;</span><br><span class="language-javascript"></span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">body</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">html</span>&gt;</span><br><br>// iframe.html<br><span class="hljs-tag">&lt;<span class="hljs-name">script</span>&gt;</span><span class="language-javascript"></span><br><span class="language-javascript"><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(foo);  <span class="hljs-comment">// undefined</span></span><br><span class="language-javascript"><span class="hljs-keyword">var</span> bar = <span class="hljs-string">&quot;aaaa&quot;</span>.<span class="hljs-title function_">substr</span>(<span class="hljs-number">0</span>, <span class="hljs-number">2</span>);  <span class="hljs-comment">// Nothing is logged.</span></span><br><span class="language-javascript"><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(bar);  <span class="hljs-comment">// &quot;aa&quot;</span></span><br><span class="language-javascript"></span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span><br></code></pre></td></tr></table></figure>
+<p>总之，每个frame都有一个Window对象。每个Window对象都有一个Context。每个Context都有自己的全局变量范围和原型链。</p>
+<h2 id="Entered-context-and-current-context"><a href="#Entered-context-and-current-context" class="headerlink" title="Entered context and current context"></a>Entered context and current context</h2><p>isolate和Context之间的关系是比较有趣的。一个isolate会在多个frame中执行JavaScripts，每个frame都有自己的context。这个意思就是一个isolate下的Context是会变化的。换句话说，isolate和Context之间的关系是1：N</p>
+<p>这里我们有一个Entered context和current context的概念。要了解差异，您需要了解两种运行时堆栈：</p>
+<p>第一个堆栈是JavaScript函数堆栈。该堆栈由V8管理。当一个函数调用另一个函数时，被调用函数入堆栈。当该函数返回时，该函数从堆栈出栈，然后返回到现在位于堆栈顶部的调用函数。每个函数都有一个相关的Context，我们将当前正在运行的函数的上下文（即，堆栈顶部的函数的上下文）称为current context</p>
+<p>看以下例子：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs html">// main.html<br><span class="hljs-tag">&lt;<span class="hljs-name">html</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">body</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">iframe</span> <span class="hljs-attr">src</span>=<span class="hljs-string">&quot;iframe.html&quot;</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">iframe</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">script</span>&gt;</span><span class="language-javascript"></span><br><span class="language-javascript"><span class="hljs-keyword">var</span> iframe = <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">querySelector</span>(<span class="hljs-string">&quot;iframe&quot;</span>);</span><br><span class="language-javascript">iframe.<span class="hljs-property">onload</span> = <span class="hljs-keyword">function</span> (<span class="hljs-params"></span>) &#123;</span><br><span class="language-javascript">    iframe.<span class="hljs-property">contentWindow</span>.<span class="hljs-title function_">func</span>();</span><br><span class="language-javascript">&#125;</span><br><span class="language-javascript"></span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">body</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">html</span>&gt;</span><br><br>// iframe.html<br><span class="hljs-tag">&lt;<span class="hljs-name">script</span>&gt;</span><span class="language-javascript"></span><br><span class="language-javascript"><span class="hljs-keyword">function</span> <span class="hljs-title function_">func</span>(<span class="hljs-params"></span>) &#123;</span><br><span class="language-javascript">  ...;</span><br><span class="language-javascript">&#125;</span><br><span class="language-javascript"></span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span><br></code></pre></td></tr></table></figure>
+<p>在上面的示例中，在运行func()时，current context指的是&lt;iframe&gt;的context。</p>
+<p>第二个堆栈以更粗糙的粒度运行。该堆栈由V8绑定（而不是V8）管理。当V8绑定调用JavaScript时，V8绑定进入context并将context推送到堆栈。 JavaScript开始在context中运行。当JavaScript完成并且控件返回到V8绑定时，V8绑定会从堆栈中弹出上下文。鉴于V8绑定和V8之间的控制可以嵌套（即，V8绑定调用JavaScript，调用V8绑定，调用另一个JavaScript等），这些context形成堆栈。推送和弹出是由任何V8 API完成的，它采用上下文参数或显式调用v8 :: Context :: Enter()和v8 :: Context :: Exit()。我们将最近输入的context称为Entered context。</p>
+<p>在上面的示例中，在运行func()时，Entered context是main frame的context（而不是&lt;iframe&gt;的context）。</p>
+<p>Entered context是实现HTML规范的条目设置对象的概念。当前上下文是实现HTML规范的现任设置对象的概念。</p>
+<p>总之，Entered context是从中开始当前JavaScript执行的context。current context是当前正在运行的JavaScript函数的context。</p>
+<p>还有另一个称为调试器上下文的特殊上下文。如果调试器处于活动状态，则可以将调试器上下文插入到上下文堆栈中</p>
+<h2 id="World"><a href="#World" class="headerlink" title="World"></a>World</h2><p>World是在Chrome扩展的内容脚本中沙盒DOM wrappers的概念. 这里三种World类型：</p>
+<p>1.main world</p>
+<p>2.isolated world</p>
+<p>3.worker world</p>
+<p>main world用于执行网页的JavaScript脚本</p>
+<p>isolated world用于执行Chrome扩展程序的内容脚本</p>
+<p>主线程的isolate有1个main world和N个isolated worlds</p>
+<p>work thread只有1 worker world ，但是没有isolated world</p>
+<p>下图有助于理解他们之间的关系<br><img src="/2022/05/04/V8-bindings-%E8%AE%BE%E8%AE%A1isolate%EF%BC%8Ccontext%EF%BC%8Cworld%EF%BC%8Cframe%E4%B9%8B%E9%97%B4%E7%9A%84%E5%85%B3%E7%B3%BB%EF%BC%88%E7%BF%BB%E8%AF%91%EF%BC%89/world%E5%85%B3%E7%B3%BB%E5%9B%BE.jpg" srcset="/img/loading.gif" lazyload alt="world关系图"><br>一个isolate中的所有Worlds共享底层C ++ DOM对象，但每个World都有自己的DOM wrappers 。这样一个隔离区中的世界可以在相同的C ++ DOM对象上运行，而无需在World中共享任何DOM wrapper</p>
+<p>每个World都有自己的上下文。这意味着每个World都有自己的全局变量范围和原型链</p>
+<p>作为沙盒的结果，一个isolate中的World不能共享任何DOM wrappers 或上下文，但可以共享底层C ++ DOM对象。没有共享DOM wrappers 或上下文这一事实意味着World之间不会共享任何JavaScript对象。这样我们就可以保证Chrome扩展在共享底层C ++ DOM对象时不共享任何JavaScript对象的安全模型。此沙箱允许Chrome扩展在共享DOM结构上运行不受信任的JavaScripts。</p>
+<p>（注意： isolated world是V8绑定的概念，而isolate和上下文是V8的概念.V8不知道isolated worlds 是什么。）</p>
+<p>总之，主线程的isolate由1个main world和N 个isolated worlds组成。worker thread的isolate 由1个 worker world 和 0 isolated world组成。一个隔离中的所有World共享底层的C ++ DOM对象，但每个World都有自己的DOM wrappers。每个World都有自己的上下文，因此有自己的全局变量范围和原型链。</p>
+<h2 id="isolates-contexts-worlds-and-frames-之间的关系"><a href="#isolates-contexts-worlds-and-frames-之间的关系" class="headerlink" title="isolates, contexts, worlds and frames 之间的关系"></a>isolates, contexts, worlds and frames 之间的关系</h2><p>总结一下isolates，contexts，worlds 和frames之间的关系：</p>
+<p><strong>DOM端的要求，一个HTML页面具有N个frame。每个frame都有自己的context</strong></p>
+<p><strong>JavaScript端的要求，一个isolate具有M个world。每个world都有context</strong><br>结果，当我们执行涉及N Frame 和M个world的主线程时，存在N * M个上下文。换句话说，为每对（frame，world）创建一个上下文。下图有助于理解这种关系：<br><img src="/2022/05/04/V8-bindings-%E8%AE%BE%E8%AE%A1isolate%EF%BC%8Ccontext%EF%BC%8Cworld%EF%BC%8Cframe%E4%B9%8B%E9%97%B4%E7%9A%84%E5%85%B3%E7%B3%BB%EF%BC%88%E7%BF%BB%E8%AF%91%EF%BC%89/frame-Context-world.jpg" srcset="/img/loading.gif" lazyload alt="frame，Context，world之间的关系"><br>主线程一次只能有一个current context，但主线程在其生命周期内可以有N * M个上下文。例如，当主线程使用World Y中的JavaScript在frame X上操作时，当前上下文被设置为（X，Y）对的上下文。主线程的当前上下文在其生命周期中发生变化。</p>
+<p>另一方面，work thread 有0 frame 和1 World。因此，工作线程只有1个context。工作线程的current context永远不会改变。</p>
+<h2 id="DOM-wrappers-and-contexts"><a href="#DOM-wrappers-and-contexts" class="headerlink" title="DOM wrappers and contexts"></a>DOM wrappers and contexts</h2><p>出于兼容性原因，只要底层C ++ DOM对象处于活动状态，我们就需要确保将相同的DOM wrapper 返回给JavaScript。我们不应该为同一个C ++ DOM对象返回不同的DOM包装器。</p>
+<p>以下是代码例子</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs html">var div = document.createElement(&quot;div&quot;);<br>div.foo = 1234;  // expando<br>var p = document.createElement(&quot;p&quot;);<br>p.appendChild(div);<br>div = null;<br>gc();<br>console.log(p.firstChild.foo);  // This should be 1234, not undefined<br></code></pre></td></tr></table></figure>
+<p>要实现只要底层C ++ DOM对象处于活动状态，同一DOM wrapper 返回到JavaScript的语义，我们需要从C ++ DOM对象到DOM包装器的映射。另外，我们需要在每个world中沙箱DOM wrapper 。为了满足这些要求，我们让每个world都拥有一个DOM wrapper 存储，它存储从C ++ DOM对象到该世界中DOM wrapper 的映射。</p>
+<p>因此，我们在一个隔离中有多个DOM wrapper 存储。main World 的映射用ScriptWrappable编写。如果ScriptWrappable :: main_world_wrapper_具有非空值，则它是main World 的C ++ DOM对象的DOM wrapper 。其他world的映射是在DOMWrapperMap中编写的。</p>
+<h2 id="DOM-wrappers-and-contexts-1"><a href="#DOM-wrappers-and-contexts-1" class="headerlink" title="DOM wrappers and contexts"></a>DOM wrappers and contexts</h2><p>创建新的DOM wrapper 时，需要选择创建DOM wrapper 的正确上下文。如果在错误的上下文中创建新的DOM包装器，最终会将JavaScript对象泄漏到其他上下文，这很可能会导致安全问题。</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs html">// main.html<br><span class="hljs-tag">&lt;<span class="hljs-name">html</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">body</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">iframe</span> <span class="hljs-attr">src</span>=<span class="hljs-string">&quot;iframe.html&quot;</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">iframe</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">script</span>&gt;</span><span class="language-javascript"></span><br><span class="language-javascript"><span class="hljs-keyword">var</span> iframe = <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">querySelector</span>(<span class="hljs-string">&quot;iframe&quot;</span>);</span><br><span class="language-javascript">iframe;  <span class="hljs-comment">// The wrapper of the iframe should be created in the context of the main frame.</span></span><br><span class="language-javascript">iframe.<span class="hljs-property">contentDocument</span>;  <span class="hljs-comment">// The wrapper of the document should be created in the context of the iframe.</span></span><br><span class="language-javascript">iframe.<span class="hljs-property">contentDocument</span>.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">&quot;click&quot;</span>,</span><br><span class="language-javascript">    <span class="hljs-keyword">function</span> (<span class="hljs-params">event</span>) &#123;  <span class="hljs-comment">// The wrapper of the event should be created in the context of the iframe.</span></span><br><span class="language-javascript">        event.<span class="hljs-property">target</span>;</span><br><span class="language-javascript">    &#125;);</span><br><span class="language-javascript"></span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">body</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">html</span>&gt;</span><br><br>// iframe.html<br><span class="hljs-tag">&lt;<span class="hljs-name">script</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span><br></code></pre></td></tr></table></figure>
+<p>要确保在正确的上下文中创建DOM wrapper ，您需要确保在调用ToV8（）时必须将当前上下文设置为正确的上下文。</p>
+<p>同步知乎：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/54135666">https://zhuanlan.zhihu.com/p/54135666</a></p>
+
+            </div>
+            <hr>
+            <div>
+              <div class="post-metas mb-3">
+                
+                  <div class="post-meta mr-3">
+                    <i class="iconfont icon-category"></i>
+                    
+                      <a class="hover-with-bg" href="/categories/V8/">V8</a>
+                    
+                  </div>
+                
+                
+                  <div class="post-meta">
+                    <i class="iconfont icon-tags"></i>
+                    
+                      <a class="hover-with-bg" href="/tags/Isolate%EF%BC%8C/">Isolate，</a>
+                    
+                      <a class="hover-with-bg" href="/tags/Context/">Context</a>
+                    
+                  </div>
+                
+              </div>
+              
+                <p class="note note-warning">
+                  
+                    本博客所有文章除特别声明外，均采用 <a target="_blank" href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh" rel="nofollow noopener noopener">CC BY-SA 4.0 协议</a> ，转载请注明出处！
+                  
+                </p>
+              
+              
+                <div class="post-prevnext">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/05/04/V8-%E5%86%85%E7%BD%AE%E5%87%BD%E6%95%B0%E7%94%A8CodeStubAssembler%E5%86%99%E6%B3%95%E4%BB%8B%E7%BB%8D/">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">V8 内置函数用CodeStubAssembler写法介绍</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90-2/">
+                        <span class="hidden-mobile">浏览器内核原理--Chromium Blink Html解析(2)</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+              <!-- Comments -->
+              <article class="comments" id="comments" lazyload>
+                
+                  
+                
+                
+
+              </article>
+            
+          </article>
+        </div>
+      </div>
+    </div>
+    
+      <div class="d-none d-lg-block col-lg-2 toc-container" id="toc-ctn">
+        <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+      </div>
+    
+  </div>
+</div>
+
+<!-- Custom -->
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v"
+                 for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+
+    
+  </main>
+
+  <footer class="text-center mt-5 py-3">
+  <div class="footer-content">
+     <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+  </div>
+  
+  <div class="statistics">
+    
+    
+
+    
+      
+        <!-- 不蒜子统计PV -->
+        <span id="busuanzi_container_site_pv" style="display: none">
+            总访问量 
+            <span id="busuanzi_value_site_pv"></span>
+             次
+          </span>
+      
+      
+        <!-- 不蒜子统计UV -->
+        <span id="busuanzi_container_site_uv" style="display: none">
+            总访客数 
+            <span id="busuanzi_value_site_uv"></span>
+             人
+          </span>
+      
+    
+  </div>
+
+
+  
+
+  
+</footer>
+
+
+  <!-- SCRIPTS -->
+  
+  <script  src="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" ></script>
+<script  src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+<!-- Plugins -->
+
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+  
+
+
+
+  
+    <script  src="https://cdn.jsdelivr.net/npm/tocbot@4/dist/tocbot.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/anchor-js@4/anchor.min.js" ></script>
+  
+  
+    <script defer src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js" ></script>
+  
+
+
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+  <script  src="https://cdn.jsdelivr.net/npm/typed.js@2/lib/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var title = document.getElementById('subtitle').title;
+      
+        typing(title);
+      
+    })(window, document);
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+<!-- 主题的启动项 保持在最底部 -->
+<script  src="/js/boot.js" ></script>
+
+
+</body>
+</html>

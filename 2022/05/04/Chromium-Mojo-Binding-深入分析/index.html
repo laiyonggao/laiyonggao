@@ -1,0 +1,527 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/touxiang.jpg">
+  <link rel="icon" href="/img/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Laiyonggao">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="用于IDL语言生成包装，通过IDL可以生成接口通信，上层可以通过接口包装直接进行进程间通信，使用方式和函数调用无区别，极大的简化代码的可读性。 本篇文章主要讲解内部关系，需要一定的mojo基础。 Mojo IDL用于简化接口生成的语言，可以学习下。官方说明文档Mojom Interface Definition Language (IDL) Mojo Binding代码路径mojo&#x2F;pu">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Chromium Mojo Binding 深入分析">
+<meta property="og:url" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/index.html">
+<meta property="og:site_name" content="赖勇高">
+<meta property="og:description" content="用于IDL语言生成包装，通过IDL可以生成接口通信，上层可以通过接口包装直接进行进程间通信，使用方式和函数调用无区别，极大的简化代码的可读性。 本篇文章主要讲解内部关系，需要一定的mojo基础。 Mojo IDL用于简化接口生成的语言，可以学习下。官方说明文档Mojom Interface Definition Language (IDL) Mojo Binding代码路径mojo&#x2F;pu">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/1.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/2.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/3.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/4.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/5.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/6.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/7.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/8.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/9.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/10.png">
+<meta property="article:published_time" content="2022-05-04T12:17:42.000Z">
+<meta property="article:modified_time" content="2022-05-04T12:24:07.550Z">
+<meta property="article:author" content="Laiyonggao">
+<meta property="article:tag" content="Mojo">
+<meta property="article:tag" content="Binding">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="http://example.com/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/1.jpg">
+  
+  
+  <title>Chromium Mojo Binding 深入分析 - 赖勇高</title>
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css" />
+
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4/github-markdown.min.css" />
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hint.css@2/hint.min.css" />
+
+  
+    
+    
+      
+      <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@10/styles/github-gist.min.css" />
+    
+  
+
+  
+    <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css" />
+  
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_ba1fz6golrf.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+<!-- 自定义样式保持在最底部 -->
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.8.14","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"right","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"copy_btn":true,"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  <header style="height: 70vh;">
+    <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>赖勇高</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div class="banner" id="banner" parallax=true
+         style="background: url('/img/default.png') no-repeat center center;
+           background-size: cover;">
+      <div class="full-bg-img">
+        <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+          <div class="page-header text-center fade-in-up">
+            <span class="h2" id="subtitle" title="Chromium Mojo Binding 深入分析">
+              
+            </span>
+
+            
+              <div class="mt-3">
+  
+  
+    <span class="post-meta">
+      <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+      <time datetime="2022-05-04 20:17" pubdate>
+        2022年5月4日 晚上
+      </time>
+    </span>
+  
+</div>
+
+<div class="mt-1">
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-chart"></i>
+      1.9k 字
+    </span>
+  
+
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-clock-fill"></i>
+      
+      
+      17 分钟
+    </span>
+  
+
+  
+  
+</div>
+
+            
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="d-none d-lg-block col-lg-2"></div>
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div class="py-5" id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">Chromium Mojo Binding 深入分析</h1>
+            
+            <div class="markdown-body">
+              <p>用于IDL语言生成包装，通过IDL可以生成接口通信，上层可以通过接口包装直接进行进程间通信，使用方式和函数调用无区别，极大的简化代码的可读性。</p>
+<p>本篇文章主要讲解内部关系，需要一定的mojo基础。</p>
+<h2 id="Mojo-IDL"><a href="#Mojo-IDL" class="headerlink" title="Mojo IDL"></a>Mojo IDL</h2><p>用于简化接口生成的语言，可以学习下。官方说明文档Mojom Interface Definition Language (IDL)</p>
+<h2 id="Mojo-Binding"><a href="#Mojo-Binding" class="headerlink" title="Mojo Binding"></a>Mojo Binding</h2><p>代码路径mojo&#x2F;public&#x2F;cpp&#x2F;bindings</p>
+<p>官方讲解：Mojo C++ Bindings API</p>
+<p>主要的涉及的接口Remote，PendingRemote，Receiver，PendingReceiver，这些类的作用我就不过多讲解了，大家可以看官方文档。</p>
+<h3 id="普通mojo接口创建"><a href="#普通mojo接口创建" class="headerlink" title="普通mojo接口创建"></a>普通mojo接口创建</h3><p>在接口通信过程中有两种情况，一种是Remote主创建，一种是Receiver主创建。<br><img src="/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/1.jpg" srcset="/img/loading.gif" lazyload><br>如上图：</p>
+<p>模式一remote端负责创建MessagePipe，会存在两个ScopedMessagePipeHandle handle（hanlde0，handle1），Receiver端会有一个handle1负责接受处理消息。每个handle都会对应一个MessagePipeDispatcher。handle0创建MultiplexRouter，接下来会创建MultiplexRouter::InterfaceEndpoint和EndPointClient。MultiplexRouter会对应多个InterfaceEndpoint用于多路复用，创建后会返回一个ScopedInterfaceEndpointHandle。</p>
+<p>模式二刚好相反。这里不多讲解</p>
+<p>MessagePipe如何创建呢？<br><img src="/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/2.jpg" srcset="/img/loading.gif" lazyload><br>MessagePipe的创建是通过Remote::BindNewPipeAndPassReceiver或则Receiver::BindNewPipeAndPassRemote创建的。不同的模式下调用不同的接口。如下图MessagePipe的与handle和MessagePipeDispatcher的关系<br><img src="/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/3.jpg" srcset="/img/loading.gif" lazyload><br>我们知道MessagePipe是非常宝贵的，不可能一个mojo接口MessagePipe，为了节省资源，则有了关联接口，接下来讲解关联接口</p>
+<h3 id="关联接口"><a href="#关联接口" class="headerlink" title="关联接口"></a>关联接口</h3><p>关联接口会关联在一个主的mojo接口中，大家共用MessagePipe，主要用ScopedInterfaceEndpointHandle区分关联接口的处理对象。</p>
+<p>主要涉及的相关类AssociatedReceiver，AssociatedRemote<br><img src="/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/4.jpg" srcset="/img/loading.gif" lazyload><br>如上图是两种模式的关联接口hanlde关系。每个关联接口都会对应有个receiver_handle和remote_handle，handle会创建InterfaceEndpointClient，这样就可以绑定了进程两端，进程通信的时候就可以找到正确的处理消息类。<br><img src="/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/5.jpg" srcset="/img/loading.gif" lazyload><br>如上图ScopedInterfaceEndpointHandle的创建是通过AssociatedReceiver::BindNewEndpointAndPassRemote或者AssociatedRemote::BindNewEndpointAndPassReceiver创建的。</p>
+<p>接下来有个疑问，Associated关联接口如何关联到主接口的呢？<br><img src="/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/6.jpg" srcset="/img/loading.gif" lazyload><br>创建关联接口是由主接口调用的，然后会系列化AssociatedEndpointHandle，通过主接口的mojo通道进行通信，发送给另一端，接受端会反系列化AssociatedEndpointHandle从而创建出endpoint。这样就实现了关联接口的两个进程之间的关联。</p>
+<h3 id="关联接口和主接口之间关系"><a href="#关联接口和主接口之间关系" class="headerlink" title="关联接口和主接口之间关系"></a>关联接口和主接口之间关系</h3><p>例如主接口A，A接口下面有 B，C，D接口，那他们之间是什么关系，如何识别？<br><img src="/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/7.jpg" srcset="/img/loading.gif" lazyload><br>Interface A会通过MojoMessageHandle Handle0去创建个MultiplexRouter，所以主接口的MultiplexRouter管理着关联接口的地方。每个关联接口会对应个InterfaceId，InterfaceId就是去消息去区分属于哪个关联接口的。InterfaceId，MultiplexRouter::InterfaceEndpoint，InterfaceEndPointClient是一一对应的关系。这样每个接口都有自己的处理端口。<br><img src="/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/8.jpg" srcset="/img/loading.gif" lazyload></p>
+<h3 id="接口调用"><a href="#接口调用" class="headerlink" title="接口调用"></a>接口调用</h3><p><img src="/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/9.jpg" srcset="/img/loading.gif" lazyload><br>上图就是Remote端接口调用时候Binding层流程</p>
+<h3 id="接口处理"><a href="#接口处理" class="headerlink" title="接口处理"></a>接口处理</h3><p><img src="/2022/05/04/Chromium-Mojo-Binding-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/10.png" srcset="/img/loading.gif" lazyload><br>上图就是Receiver端接口调用时候Binding层流程</p>
+<p>上面具体的代码就不贴出来了，大家自行去对应即可。如果有出入，请多多指教</p>
+<p>同步知乎：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/508534942">https://zhuanlan.zhihu.com/p/508534942</a></p>
+
+            </div>
+            <hr>
+            <div>
+              <div class="post-metas mb-3">
+                
+                  <div class="post-meta mr-3">
+                    <i class="iconfont icon-category"></i>
+                    
+                      <a class="hover-with-bg" href="/categories/Chromium/">Chromium</a>
+                    
+                  </div>
+                
+                
+                  <div class="post-meta">
+                    <i class="iconfont icon-tags"></i>
+                    
+                      <a class="hover-with-bg" href="/tags/Mojo/">Mojo</a>
+                    
+                      <a class="hover-with-bg" href="/tags/Binding/">Binding</a>
+                    
+                  </div>
+                
+              </div>
+              
+                <p class="note note-warning">
+                  
+                    本博客所有文章除特别声明外，均采用 <a target="_blank" href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh" rel="nofollow noopener noopener">CC BY-SA 4.0 协议</a> ，转载请注明出处！
+                  
+                </p>
+              
+              
+                <div class="post-prevnext">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/05/04/Chromium-Css%E8%A7%A3%E6%9E%90%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90/">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">Chromium Css解析深入分析</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/05/04/Chromium-IPC-%E6%B7%B1%E5%85%A5%E5%88%86%E6%9E%90%EF%BC%88%E5%9F%BA%E4%BA%8EMojo%EF%BC%89/">
+                        <span class="hidden-mobile">Chromium IPC 深入分析（基于Mojo）</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+              <!-- Comments -->
+              <article class="comments" id="comments" lazyload>
+                
+                  
+                
+                
+
+              </article>
+            
+          </article>
+        </div>
+      </div>
+    </div>
+    
+      <div class="d-none d-lg-block col-lg-2 toc-container" id="toc-ctn">
+        <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+      </div>
+    
+  </div>
+</div>
+
+<!-- Custom -->
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v"
+                 for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+
+    
+  </main>
+
+  <footer class="text-center mt-5 py-3">
+  <div class="footer-content">
+     <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+  </div>
+  
+  <div class="statistics">
+    
+    
+
+    
+      
+        <!-- 不蒜子统计PV -->
+        <span id="busuanzi_container_site_pv" style="display: none">
+            总访问量 
+            <span id="busuanzi_value_site_pv"></span>
+             次
+          </span>
+      
+      
+        <!-- 不蒜子统计UV -->
+        <span id="busuanzi_container_site_uv" style="display: none">
+            总访客数 
+            <span id="busuanzi_value_site_uv"></span>
+             人
+          </span>
+      
+    
+  </div>
+
+
+  
+
+  
+</footer>
+
+
+  <!-- SCRIPTS -->
+  
+  <script  src="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" ></script>
+<script  src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+<!-- Plugins -->
+
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+  
+
+
+
+  
+    <script  src="https://cdn.jsdelivr.net/npm/tocbot@4/dist/tocbot.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/anchor-js@4/anchor.min.js" ></script>
+  
+  
+    <script defer src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js" ></script>
+  
+
+
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+  <script  src="https://cdn.jsdelivr.net/npm/typed.js@2/lib/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var title = document.getElementById('subtitle').title;
+      
+        typing(title);
+      
+    })(window, document);
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+<!-- 主题的启动项 保持在最底部 -->
+<script  src="/js/boot.js" ></script>
+
+
+</body>
+</html>

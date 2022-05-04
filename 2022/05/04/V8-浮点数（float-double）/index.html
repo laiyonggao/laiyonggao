@@ -1,0 +1,519 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/touxiang.jpg">
+  <link rel="icon" href="/img/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Laiyonggao">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="上章说到v8的小整数表示方式，这章讲解下超出小整数是如何表示的。 V8里有个类是HeapNumber，我们可以看下这个类的英文注释 12&#x2F;&#x2F; The HeapNumber class describes heap allocated numbers that cannot be&#x2F;&#x2F; represented in a Smi (small integer) 意思就是不能用smi表示的数，都分配在He">
+<meta property="og:type" content="article">
+<meta property="og:title" content="V8 浮点数（float&#x2F;double）">
+<meta property="og:url" content="http://example.com/2022/05/04/V8-%E6%B5%AE%E7%82%B9%E6%95%B0%EF%BC%88float-double%EF%BC%89/index.html">
+<meta property="og:site_name" content="赖勇高">
+<meta property="og:description" content="上章说到v8的小整数表示方式，这章讲解下超出小整数是如何表示的。 V8里有个类是HeapNumber，我们可以看下这个类的英文注释 12&#x2F;&#x2F; The HeapNumber class describes heap allocated numbers that cannot be&#x2F;&#x2F; represented in a Smi (small integer) 意思就是不能用smi表示的数，都分配在He">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/2022/05/04/V8-%E6%B5%AE%E7%82%B9%E6%95%B0%EF%BC%88float-double%EF%BC%89/%E5%86%85%E5%AD%98%E7%BB%93%E6%9E%84.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/V8-%E6%B5%AE%E7%82%B9%E6%95%B0%EF%BC%88float-double%EF%BC%89/1.jpg">
+<meta property="article:published_time" content="2022-05-04T08:00:06.000Z">
+<meta property="article:modified_time" content="2022-05-04T08:04:44.874Z">
+<meta property="article:author" content="Laiyonggao">
+<meta property="article:tag" content="float">
+<meta property="article:tag" content="double">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="http://example.com/2022/05/04/V8-%E6%B5%AE%E7%82%B9%E6%95%B0%EF%BC%88float-double%EF%BC%89/%E5%86%85%E5%AD%98%E7%BB%93%E6%9E%84.jpg">
+  
+  
+  <title>V8 浮点数（float/double） - 赖勇高</title>
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css" />
+
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4/github-markdown.min.css" />
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hint.css@2/hint.min.css" />
+
+  
+    
+    
+      
+      <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@10/styles/github-gist.min.css" />
+    
+  
+
+  
+    <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css" />
+  
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_ba1fz6golrf.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+<!-- 自定义样式保持在最底部 -->
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.8.14","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"right","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"copy_btn":true,"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  <header style="height: 70vh;">
+    <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>赖勇高</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div class="banner" id="banner" parallax=true
+         style="background: url('/img/default.png') no-repeat center center;
+           background-size: cover;">
+      <div class="full-bg-img">
+        <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+          <div class="page-header text-center fade-in-up">
+            <span class="h2" id="subtitle" title="V8 浮点数（float/double）">
+              
+            </span>
+
+            
+              <div class="mt-3">
+  
+  
+    <span class="post-meta">
+      <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+      <time datetime="2022-05-04 16:00" pubdate>
+        2022年5月4日 下午
+      </time>
+    </span>
+  
+</div>
+
+<div class="mt-1">
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-chart"></i>
+      2.9k 字
+    </span>
+  
+
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-clock-fill"></i>
+      
+      
+      25 分钟
+    </span>
+  
+
+  
+  
+</div>
+
+            
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="d-none d-lg-block col-lg-2"></div>
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div class="py-5" id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">V8 浮点数（float/double）</h1>
+            
+            <div class="markdown-body">
+              <p>上章说到v8的小整数表示方式，这章讲解下超出小整数是如何表示的。</p>
+<p>V8里有个类是HeapNumber，我们可以看下这个类的英文注释</p>
+<figure class="highlight 1c"><table><tr><td class="gutter"><div class="code-wrapper"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></div></td><td class="code"><pre><code class="hljs 1c"><span class="hljs-comment">// The HeapNumber class describes heap allocated numbers that cannot be</span><br><span class="hljs-comment">// represented in a Smi (small integer)</span><br></code></pre></td></tr></table></figure>
+<p>意思就是不能用smi表示的数，都分配在HeapNumber里表示，所以非smi的数是分配在堆里面的。</p>
+<h2 id="HeapNumber的内存结构（64位架构）"><a href="#HeapNumber的内存结构（64位架构）" class="headerlink" title="HeapNumber的内存结构（64位架构）"></a>HeapNumber的内存结构（64位架构）</h2><p><img src="/2022/05/04/V8-%E6%B5%AE%E7%82%B9%E6%95%B0%EF%BC%88float-double%EF%BC%89/%E5%86%85%E5%AD%98%E7%BB%93%E6%9E%84.jpg" srcset="/img/loading.gif" lazyload alt="内存结构"><br>由图可知HeapNumber的size大小是16字节，前8字节是保存map的地址，后8字节是真实的数值（float&#x2F;double）。</p>
+<p>例如：有个HeapNumber 指针是0x244de278df30（注意这里的指针是通过地址-1得来的）。<br><img src="/2022/05/04/V8-%E6%B5%AE%E7%82%B9%E6%95%B0%EF%BC%88float-double%EF%BC%89/1.jpg" srcset="/img/loading.gif" lazyload></p>
+<h2 id="HeapNumber的源码分析"><a href="#HeapNumber的源码分析" class="headerlink" title="HeapNumber的源码分析"></a>HeapNumber的源码分析</h2><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">HeapNumber</span>: <span class="hljs-keyword">public</span> HeapObject &#123;<br> <span class="hljs-keyword">public</span>:<br>  <span class="hljs-comment">// [value]: number value.</span><br>  <span class="hljs-function"><span class="hljs-keyword">inline</span> <span class="hljs-type">double</span> <span class="hljs-title">value</span><span class="hljs-params">()</span> <span class="hljs-type">const</span></span>;<br>  <span class="hljs-function"><span class="hljs-keyword">inline</span> <span class="hljs-type">void</span> <span class="hljs-title">set_value</span><span class="hljs-params">(<span class="hljs-type">double</span> value)</span></span>;<br><br>  <span class="hljs-function"><span class="hljs-keyword">inline</span> <span class="hljs-type">uint64_t</span> <span class="hljs-title">value_as_bits</span><span class="hljs-params">()</span> <span class="hljs-type">const</span></span>;<br>  <span class="hljs-function"><span class="hljs-keyword">inline</span> <span class="hljs-type">void</span> <span class="hljs-title">set_value_as_bits</span><span class="hljs-params">(<span class="hljs-type">uint64_t</span> bits)</span></span>;<br><br>  <span class="hljs-built_in">DECL_CAST</span>(HeapNumber)<br><br>  <span class="hljs-function">V8_EXPORT_PRIVATE <span class="hljs-type">void</span> <span class="hljs-title">HeapNumberPrint</span><span class="hljs-params">(std::ostream&amp; os)</span></span>;  <span class="hljs-comment">// NOLINT</span><br>  <span class="hljs-built_in">DECL_VERIFIER</span>(HeapNumber)<br><br>  <span class="hljs-function"><span class="hljs-keyword">inline</span> <span class="hljs-type">int</span> <span class="hljs-title">get_exponent</span><span class="hljs-params">()</span></span>;<br>  <span class="hljs-function"><span class="hljs-keyword">inline</span> <span class="hljs-type">int</span> <span class="hljs-title">get_sign</span><span class="hljs-params">()</span></span>;<br><br>  <span class="hljs-comment">// Layout description.</span><br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kValueOffset = HeapObject::kHeaderSize; <span class="hljs-comment">// 值的偏移，是8</span><br>  <span class="hljs-comment">// IEEE doubles are two 32 bit words.  The first is just mantissa, the second</span><br>  <span class="hljs-comment">// is a mixture of sign, exponent and mantissa. The offsets of two 32 bit</span><br>  <span class="hljs-comment">// words within double numbers are endian dependent and they are set</span><br>  <span class="hljs-comment">// accordingly.</span><br><span class="hljs-meta">#<span class="hljs-keyword">if</span> defined(V8_TARGET_LITTLE_ENDIAN)</span><br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kMantissaOffset = kValueOffset;<br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kExponentOffset = kValueOffset + <span class="hljs-number">4</span>;<br><span class="hljs-meta">#<span class="hljs-keyword">elif</span> defined(V8_TARGET_BIG_ENDIAN)</span><br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kMantissaOffset = kValueOffset + <span class="hljs-number">4</span>;<br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kExponentOffset = kValueOffset;<br><span class="hljs-meta">#<span class="hljs-keyword">else</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">error</span> Unknown byte ordering</span><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br><br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kSize = kValueOffset + kDoubleSize; <span class="hljs-comment">// 对象的大小， 其实就是值的偏移+ double类型的大小</span><br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">uint32_t</span> kSignMask = <span class="hljs-number">0x80000000</span>u;<br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">uint32_t</span> kExponentMask = <span class="hljs-number">0x7ff00000</span>u;<br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">uint32_t</span> kMantissaMask = <span class="hljs-number">0xfffff</span>u;<br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kMantissaBits = <span class="hljs-number">52</span>;<br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kExponentBits = <span class="hljs-number">11</span>;<br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kExponentBias = <span class="hljs-number">1023</span>;<br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kExponentShift = <span class="hljs-number">20</span>;<br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kInfinityOrNanExponent =<br>      (kExponentMask &gt;&gt; kExponentShift) - kExponentBias;<br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kMantissaBitsInTopWord = <span class="hljs-number">20</span>;<br>  <span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">int</span> kNonMantissaBitsInTopWord = <span class="hljs-number">12</span>;<br><br> <span class="hljs-keyword">private</span>:<br>  <span class="hljs-built_in">DISALLOW_IMPLICIT_CONSTRUCTORS</span>(HeapNumber);<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>staticconstint kValueOffset &#x3D; HeapObject::kHeaderSize; 这个kValueOffset 表示了真正数字在内存结构的偏移，值是8。设置和获取浮点数字是都是通过这个偏移进行设置的。</p>
+<p>接下来分析下值value的函数</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">double</span> <span class="hljs-title">HeapNumber::value</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>&#123;<br>  <span class="hljs-keyword">return</span> <span class="hljs-built_in">READ_DOUBLE_FIELD</span>(<span class="hljs-keyword">this</span>, kValueOffset); <span class="hljs-comment">// 由上可知kValueOffset的值是8</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<p>READ_DOUBLE_FIELD 是个宏，代码如下</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-meta">#<span class="hljs-keyword">define</span> READ_DOUBLE_FIELD(p, offset) \</span><br><span class="hljs-meta">  ReadDoubleValue(FIELD_ADDR_CONST(p, offset))</span><br></code></pre></td></tr></table></figure>
+<p>通过偏移获取对应的地址位置，其实就是 （首地址）+8</p>
+<p>ReadDoubleValue的实现</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-type">double</span> <span class="hljs-title">ReadDoubleValue</span><span class="hljs-params">(<span class="hljs-type">const</span> <span class="hljs-type">void</span>* p)</span> </span>&#123;<br>  <span class="hljs-keyword">return</span> <span class="hljs-built_in">ReadUnalignedValue</span>&lt;<span class="hljs-type">double</span>&gt;(p);<br>&#125;<br><br><br><span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> V&gt;<br><span class="hljs-function"><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> V <span class="hljs-title">ReadUnalignedValue</span><span class="hljs-params">(<span class="hljs-type">const</span> <span class="hljs-type">void</span>* p)</span> </span>&#123;<br><span class="hljs-meta">#<span class="hljs-keyword">if</span> !(V8_TARGET_ARCH_MIPS || V8_TARGET_ARCH_MIPS64 || V8_TARGET_ARCH_ARM)</span><br>  <span class="hljs-keyword">return</span> *<span class="hljs-built_in">reinterpret_cast</span>&lt;<span class="hljs-type">const</span> V*&gt;(p);<br><span class="hljs-meta">#<span class="hljs-keyword">else</span>   <span class="hljs-comment">// V8_TARGET_ARCH_MIPS || V8_TARGET_ARCH_MIPS64 || V8_TARGET_ARCH_ARM</span></span><br>  V r;<br>  <span class="hljs-built_in">memmove</span>(&amp;r, p, <span class="hljs-built_in">sizeof</span>(V));<br>  <span class="hljs-keyword">return</span> r;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span>  <span class="hljs-comment">// V8_TARGET_ARCH_MIPS || V8_TARGET_ARCH_MIPS64 || V8_TARGET_ARCH_ARM</span></span><br>&#125;<br></code></pre></td></tr></table></figure>
+<p>上面代码表示：地将p的存值拷贝到变量r里面，则实现了获取浮点数。（x64架构的是强制转换）</p>
+<p>同理，设置浮点型值也是一样的道理。</p>
+<p>同步知乎：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/82914271">https://zhuanlan.zhihu.com/p/82914271</a></p>
+
+            </div>
+            <hr>
+            <div>
+              <div class="post-metas mb-3">
+                
+                  <div class="post-meta mr-3">
+                    <i class="iconfont icon-category"></i>
+                    
+                      <a class="hover-with-bg" href="/categories/V8/">V8</a>
+                    
+                  </div>
+                
+                
+                  <div class="post-meta">
+                    <i class="iconfont icon-tags"></i>
+                    
+                      <a class="hover-with-bg" href="/tags/float/">float</a>
+                    
+                      <a class="hover-with-bg" href="/tags/double/">double</a>
+                    
+                  </div>
+                
+              </div>
+              
+                <p class="note note-warning">
+                  
+                    本博客所有文章除特别声明外，均采用 <a target="_blank" href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh" rel="nofollow noopener noopener">CC BY-SA 4.0 协议</a> ，转载请注明出处！
+                  
+                </p>
+              
+              
+                <div class="post-prevnext">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/05/04/JavaScript-%E5%BC%95%E6%93%8E-V8-%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B%E6%A6%82%E8%BF%B0/">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">JavaScript 引擎 V8 执行流程概述</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/05/04/V8-%E5%B0%8F%E6%95%B4%E6%95%B0%EF%BC%88smi%EF%BC%89%E5%92%8C%E6%8C%87%E9%92%88/">
+                        <span class="hidden-mobile">V8 小整数（smi）和指针</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+              <!-- Comments -->
+              <article class="comments" id="comments" lazyload>
+                
+                  
+                
+                
+
+              </article>
+            
+          </article>
+        </div>
+      </div>
+    </div>
+    
+      <div class="d-none d-lg-block col-lg-2 toc-container" id="toc-ctn">
+        <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+      </div>
+    
+  </div>
+</div>
+
+<!-- Custom -->
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v"
+                 for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+
+    
+  </main>
+
+  <footer class="text-center mt-5 py-3">
+  <div class="footer-content">
+     <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+  </div>
+  
+  <div class="statistics">
+    
+    
+
+    
+      
+        <!-- 不蒜子统计PV -->
+        <span id="busuanzi_container_site_pv" style="display: none">
+            总访问量 
+            <span id="busuanzi_value_site_pv"></span>
+             次
+          </span>
+      
+      
+        <!-- 不蒜子统计UV -->
+        <span id="busuanzi_container_site_uv" style="display: none">
+            总访客数 
+            <span id="busuanzi_value_site_uv"></span>
+             人
+          </span>
+      
+    
+  </div>
+
+
+  
+
+  
+</footer>
+
+
+  <!-- SCRIPTS -->
+  
+  <script  src="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" ></script>
+<script  src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+<!-- Plugins -->
+
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+  
+
+
+
+  
+    <script  src="https://cdn.jsdelivr.net/npm/tocbot@4/dist/tocbot.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/anchor-js@4/anchor.min.js" ></script>
+  
+  
+    <script defer src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js" ></script>
+  
+
+
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+  <script  src="https://cdn.jsdelivr.net/npm/typed.js@2/lib/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var title = document.getElementById('subtitle').title;
+      
+        typing(title);
+      
+    })(window, document);
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+<!-- 主题的启动项 保持在最底部 -->
+<script  src="/js/boot.js" ></script>
+
+
+</body>
+</html>

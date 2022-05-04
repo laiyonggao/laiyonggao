@@ -1,0 +1,528 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/touxiang.jpg">
+  <link rel="icon" href="/img/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Laiyonggao">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="Isolate::New函数作用用于创建Isolate实例。 头文件： 1#include &quot;src&#x2F;v8.h&quot; New函数申明12345678910&#x2F;** * Creates a new isolate.  Does not change the currently entered * isolate. * * When an isolate is no longer use">
+<meta property="og:type" content="article">
+<meta property="og:title" content="V8接口指南--Isolate::New">
+<meta property="og:url" content="http://example.com/2022/05/04/V8%E6%8E%A5%E5%8F%A3%E6%8C%87%E5%8D%97-Isolate-New/index.html">
+<meta property="og:site_name" content="赖勇高">
+<meta property="og:description" content="Isolate::New函数作用用于创建Isolate实例。 头文件： 1#include &quot;src&#x2F;v8.h&quot; New函数申明12345678910&#x2F;** * Creates a new isolate.  Does not change the currently entered * isolate. * * When an isolate is no longer use">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-05-04T08:38:54.000Z">
+<meta property="article:modified_time" content="2022-05-04T08:43:43.317Z">
+<meta property="article:author" content="Laiyonggao">
+<meta property="article:tag" content="指南">
+<meta property="article:tag" content="Isolate">
+<meta name="twitter:card" content="summary_large_image">
+  
+  
+  <title>V8接口指南--Isolate::New - 赖勇高</title>
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css" />
+
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4/github-markdown.min.css" />
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hint.css@2/hint.min.css" />
+
+  
+    
+    
+      
+      <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@10/styles/github-gist.min.css" />
+    
+  
+
+  
+    <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css" />
+  
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_ba1fz6golrf.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+<!-- 自定义样式保持在最底部 -->
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.8.14","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"right","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"copy_btn":true,"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  <header style="height: 70vh;">
+    <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>赖勇高</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div class="banner" id="banner" parallax=true
+         style="background: url('/img/default.png') no-repeat center center;
+           background-size: cover;">
+      <div class="full-bg-img">
+        <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+          <div class="page-header text-center fade-in-up">
+            <span class="h2" id="subtitle" title="V8接口指南--Isolate::New">
+              
+            </span>
+
+            
+              <div class="mt-3">
+  
+  
+    <span class="post-meta">
+      <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+      <time datetime="2022-05-04 16:38" pubdate>
+        2022年5月4日 下午
+      </time>
+    </span>
+  
+</div>
+
+<div class="mt-1">
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-chart"></i>
+      7.1k 字
+    </span>
+  
+
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-clock-fill"></i>
+      
+      
+      60 分钟
+    </span>
+  
+
+  
+  
+</div>
+
+            
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="d-none d-lg-block col-lg-2"></div>
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div class="py-5" id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">V8接口指南--Isolate::New</h1>
+            
+            <div class="markdown-body">
+              <h2 id="Isolate-New函数作用"><a href="#Isolate-New函数作用" class="headerlink" title="Isolate::New函数作用"></a>Isolate::New函数作用</h2><p>用于创建Isolate实例。</p>
+<p>头文件：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><div class="code-wrapper"><pre><span class="line">1</span><br></pre></div></td><td class="code"><pre><code class="hljs C++"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;src/v8.h&quot;</span></span><br></code></pre></td></tr></table></figure>
+<h2 id="New函数申明"><a href="#New函数申明" class="headerlink" title="New函数申明"></a>New函数申明</h2><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * Creates a new isolate.  Does not change the currently entered</span><br><span class="hljs-comment"> * isolate.</span><br><span class="hljs-comment"> *</span><br><span class="hljs-comment"> * When an isolate is no longer used its resources should be freed</span><br><span class="hljs-comment"> * by calling Dispose().  Using the delete operator is not allowed.</span><br><span class="hljs-comment"> *</span><br><span class="hljs-comment"> * V8::Initialize() must have run prior to this.</span><br><span class="hljs-comment"> */</span><br><span class="hljs-function"><span class="hljs-type">static</span> Isolate* <span class="hljs-title">New</span><span class="hljs-params">(<span class="hljs-type">const</span> CreateParams&amp; params)</span></span>;<br></code></pre></td></tr></table></figure>
+<p>注意：</p>
+<p>可以从注释上看，调用该函数只是new一个isolate实例，但是并没有改变当前的所处在isolate中。</p>
+<p>如果不再使用isolate，则需要调用Dispose()进行释放。</p>
+<p>参数：</p>
+<p>params：创建隔离的参数结构体</p>
+<p><strong>CreateParams的介绍：</strong></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">struct</span> <span class="hljs-title class_">CreateParams</span> &#123;<br>  <span class="hljs-built_in">CreateParams</span>()<br>      : <span class="hljs-built_in">entry_hook</span>(<span class="hljs-literal">nullptr</span>),<br>        <span class="hljs-built_in">code_event_handler</span>(<span class="hljs-literal">nullptr</span>),<br>        <span class="hljs-built_in">snapshot_blob</span>(<span class="hljs-literal">nullptr</span>),<br>        <span class="hljs-built_in">counter_lookup_callback</span>(<span class="hljs-literal">nullptr</span>),<br>        <span class="hljs-built_in">create_histogram_callback</span>(<span class="hljs-literal">nullptr</span>),<br>        <span class="hljs-built_in">add_histogram_sample_callback</span>(<span class="hljs-literal">nullptr</span>),<br>        <span class="hljs-built_in">array_buffer_allocator</span>(<span class="hljs-literal">nullptr</span>),<br>        <span class="hljs-built_in">external_references</span>(<span class="hljs-literal">nullptr</span>),<br>        <span class="hljs-built_in">allow_atomics_wait</span>(<span class="hljs-literal">true</span>),<br>        <span class="hljs-built_in">only_terminate_in_safe_scope</span>(<span class="hljs-literal">false</span>) &#123;&#125;<br><br>  <span class="hljs-comment">/**</span><br><span class="hljs-comment">   * The optional entry_hook allows the host application to provide the</span><br><span class="hljs-comment">   * address of a function that&#x27;s invoked on entry to every V8-generated</span><br><span class="hljs-comment">   * function.  Note that entry_hook is invoked at the very start of each</span><br><span class="hljs-comment">   * generated function.</span><br><span class="hljs-comment">   * An entry_hook can only be provided in no-snapshot builds; in snapshot</span><br><span class="hljs-comment">   * builds it must be nullptr.</span><br><span class="hljs-comment">   * TODO(v8:8503): Remove entry_hook.</span><br><span class="hljs-comment">   */</span><br>  FunctionEntryHook entry_hook;<br><br>  <span class="hljs-comment">/**</span><br><span class="hljs-comment">   * Allows the host application to provide the address of a function that is</span><br><span class="hljs-comment">   * notified each time code is added, moved or removed.</span><br><span class="hljs-comment">   */</span><br>  JitCodeEventHandler code_event_handler;<br><br>  <span class="hljs-comment">/**</span><br><span class="hljs-comment">   * ResourceConstraints to use for the new Isolate.</span><br><span class="hljs-comment">   */</span><br>  ResourceConstraints constraints;<br><br>  <span class="hljs-comment">/**</span><br><span class="hljs-comment">   * Explicitly specify a startup snapshot blob. The embedder owns the blob.</span><br><span class="hljs-comment">   */</span><br>  StartupData* snapshot_blob;<br><br><br>  <span class="hljs-comment">/**</span><br><span class="hljs-comment">   * Enables the host application to provide a mechanism for recording</span><br><span class="hljs-comment">   * statistics counters.</span><br><span class="hljs-comment">   */</span><br>  CounterLookupCallback counter_lookup_callback;<br><br>  <span class="hljs-comment">/**</span><br><span class="hljs-comment">   * Enables the host application to provide a mechanism for recording</span><br><span class="hljs-comment">   * histograms. The CreateHistogram function returns a</span><br><span class="hljs-comment">   * histogram which will later be passed to the AddHistogramSample</span><br><span class="hljs-comment">   * function.</span><br><span class="hljs-comment">   */</span><br>  CreateHistogramCallback create_histogram_callback;<br>  AddHistogramSampleCallback add_histogram_sample_callback;<br><br>  <span class="hljs-comment">/**</span><br><span class="hljs-comment">   * The ArrayBuffer::Allocator to use for allocating and freeing the backing</span><br><span class="hljs-comment">   * store of ArrayBuffers.</span><br><span class="hljs-comment">   */</span><br>  ArrayBuffer::Allocator* array_buffer_allocator;<br><br>  <span class="hljs-comment">/**</span><br><span class="hljs-comment">   * Specifies an optional nullptr-terminated array of raw addresses in the</span><br><span class="hljs-comment">   * embedder that V8 can match against during serialization and use for</span><br><span class="hljs-comment">   * deserialization. This array and its content must stay valid for the</span><br><span class="hljs-comment">   * entire lifetime of the isolate.</span><br><span class="hljs-comment">   */</span><br>  <span class="hljs-type">const</span> <span class="hljs-type">intptr_t</span>* external_references;<br><br>  <span class="hljs-comment">/**</span><br><span class="hljs-comment">   * Whether calling Atomics.wait (a function that may block) is allowed in</span><br><span class="hljs-comment">   * this isolate. This can also be configured via SetAllowAtomicsWait.</span><br><span class="hljs-comment">   */</span><br>  <span class="hljs-type">bool</span> allow_atomics_wait;<br><br>  <span class="hljs-comment">/**</span><br><span class="hljs-comment">   * Termination is postponed when there is no active SafeForTerminationScope.</span><br><span class="hljs-comment">   */</span><br>  <span class="hljs-type">bool</span> only_terminate_in_safe_scope;<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>成员介绍：</p>
+<p>entry_hook： 已经弃用了，不用关注</p>
+<p>code_event_handler：类型是JitCodeEventHandler函数回调，用于js里函数代码添加，删除的回调。用于接入方监听js代码变化。（一般不设置），使用方式可见实例代码。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * Callback function passed to SetJitCodeEventHandler.</span><br><span class="hljs-comment"> *</span><br><span class="hljs-comment"> * \param event code add, move or removal event.</span><br><span class="hljs-comment"> */</span><br><span class="hljs-function"><span class="hljs-keyword">typedef</span> <span class="hljs-title">void</span> <span class="hljs-params">(*JitCodeEventHandler)</span><span class="hljs-params">(<span class="hljs-type">const</span> JitCodeEvent* event)</span></span>;<br></code></pre></td></tr></table></figure>
+<p>constraints：用于设置isolate的资源大小的。（一般默认值）</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">V8_EXPORT</span> ResourceConstraints &#123;<br> <span class="hljs-keyword">public</span>:<br><br>......<br><br> <span class="hljs-keyword">private</span>:<br>  <span class="hljs-comment">// max_semi_space_size_ is in KB</span><br>  <span class="hljs-type">size_t</span> max_semi_space_size_in_kb_; <span class="hljs-comment">// </span><br><br>  <span class="hljs-comment">// The remaining limits are in MB</span><br>  <span class="hljs-type">size_t</span> max_old_space_size_; <span class="hljs-comment">// 最大的老生代内存大小</span><br>  <span class="hljs-type">size_t</span> max_executable_size_; <br>  <span class="hljs-type">uint32_t</span>* stack_limit_; <span class="hljs-comment">// js栈大小限制</span><br>  <span class="hljs-type">size_t</span> code_range_size_; <span class="hljs-comment">// 代码区内存大小</span><br>  <span class="hljs-type">size_t</span> max_zone_pool_size_;<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>snapshot_blob：快照数据</p>
+<p>array_buffer_allocator： 类型是ArrayBuffer::Allocator（下章节具体讲解这个类），ArrayBuffer的后端内存分配器，这个是必须设置的，可以设置个默认值。代码使用例子：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs C++">v8::Isolate::CreateParams create_params;<br>create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::<span class="hljs-built_in">NewDefaultAllocator</span>();<br></code></pre></td></tr></table></figure>
+<p><strong>code_event_handler的代码使用实例：</strong></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-comment">// Copyright 2012 the V8 project authors. All rights reserved.</span><br><span class="hljs-comment">// Use of this source code is governed by a BSD-style license that can be</span><br><span class="hljs-comment">// found in the LICENSE file.</span><br><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;errno.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;stdlib.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;string.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;sys/stat.h&gt;</span></span><br><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;include/libplatform/libplatform.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;include/libplatform/v8-tracing.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;src/api-inl.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;src/base/cpu.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;src/base/logging.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;src/objects-inl.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;src/objects.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;src/utils.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;src/v8.h&quot;</span></span><br><br><span class="hljs-keyword">namespace</span> demo &#123;<br><br>v8::Platform* g_default_platform;<br>std::unique_ptr&lt;v8::Platform&gt; g_platform;<br><br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">OnJitEvent</span><span class="hljs-params">(<span class="hljs-type">const</span> v8::JitCodeEvent* event)</span> </span>&#123;<br>  <span class="hljs-keyword">switch</span> (event-&gt;type) &#123;<br>    <span class="hljs-keyword">case</span> v8::JitCodeEvent::CODE_ADDED: &#123;<br>      <span class="hljs-built_in">CHECK_NOT_NULL</span>(event-&gt;code_start);<br>      <span class="hljs-built_in">CHECK_NE</span>(<span class="hljs-number">0</span>, <span class="hljs-built_in">static_cast</span>&lt;<span class="hljs-type">int</span>&gt;(event-&gt;code_len));<br>      <span class="hljs-built_in">CHECK_NOT_NULL</span>(event-&gt;name.str);<br>      std::cout&lt;&lt;<span class="hljs-string">&quot;CODE_ADDED js function: &quot;</span>&lt;&lt;event-&gt;name.str&lt;&lt;<span class="hljs-string">&quot;\n&quot;</span>;<br>      &#125;<br>      <span class="hljs-keyword">break</span>;<br><br>    <span class="hljs-keyword">case</span> v8::JitCodeEvent::CODE_MOVED:<br>      <span class="hljs-keyword">break</span>;<br>    <span class="hljs-keyword">default</span>:<br>      <span class="hljs-keyword">break</span>;<br>  &#125;<br>&#125;<br><br><br><span class="hljs-function"><span class="hljs-type">int</span> <span class="hljs-title">Main</span><span class="hljs-params">(<span class="hljs-type">int</span> argc, <span class="hljs-type">char</span>* argv[])</span> </span>&#123;<br>  <span class="hljs-comment">// new default platform. use v8::platform::CreateDefaultPlatform() in old version</span><br>  g_platform = v8::platform::<span class="hljs-built_in">NewDefaultPlatform</span>();<br><br>  g_default_platform = g_platform.<span class="hljs-built_in">get</span>();<br><br>  <span class="hljs-comment">// init platform</span><br>  v8::V8::<span class="hljs-built_in">InitializePlatform</span>(g_platform.<span class="hljs-built_in">get</span>());<br>  v8::V8::<span class="hljs-built_in">Initialize</span>();<br><br>  <span class="hljs-comment">// set natives_blob / snapshot_blob file path.</span><br>  <span class="hljs-comment">// you can use InitializeExternalStartupData(const char* natives_blob, const char* snapshot_blob)</span><br>  v8::V8::<span class="hljs-built_in">InitializeExternalStartupData</span>(argv[<span class="hljs-number">0</span>]);<br><br>  v8::Isolate::CreateParams create_params;<br><br>  create_params.code_event_handler = OnJitEvent;<br>  create_params.array_buffer_allocator =<br>        v8::ArrayBuffer::Allocator::<span class="hljs-built_in">NewDefaultAllocator</span>();<br>  <br>  v8::Isolate* isolate = v8::Isolate::<span class="hljs-built_in">New</span>(create_params);<br>  &#123;<br>      <span class="hljs-function">v8::HandleScope <span class="hljs-title">scope</span><span class="hljs-params">(isolate)</span></span>;<br><br>      v8::Local&lt;v8::Context&gt; context = v8::Context::<span class="hljs-built_in">New</span>(isolate);<br>      v8::<span class="hljs-function">Context::Scope <span class="hljs-title">context_scope</span><span class="hljs-params">(context)</span></span>;<br>      v8::Local&lt;v8::String&gt; source =<br>      v8::String::<span class="hljs-built_in">NewFromUtf8</span>(isolate,<br>          <span class="hljs-string">&quot;function a(a, b)&#123;return a+b;&#125;\n&quot;</span><br>          <span class="hljs-string">&quot;function b(a, b)&#123;return a+b;&#125;\n&quot;</span><br>          <span class="hljs-string">&quot;function c(a, b)&#123;return a+b;&#125;\n&quot;</span><br>          <span class="hljs-string">&quot;a(1, 2)\n&quot;</span><br>          <span class="hljs-string">&quot;b(1, 2)\n&quot;</span><br>          <span class="hljs-string">&quot;c(1, 2)\n&quot;</span>,<br>          v8::NewStringType::kNormal)<br>          .<span class="hljs-built_in">ToLocalChecked</span>();<br><br>      v8::Local&lt;v8::Script&gt; script = v8::Script::<span class="hljs-built_in">Compile</span>(context, source).<span class="hljs-built_in">ToLocalChecked</span>();<br>      v8::Local&lt;v8::Value&gt; result = script-&gt;<span class="hljs-built_in">Run</span>(context).<span class="hljs-built_in">ToLocalChecked</span>();<br>      <span class="hljs-keyword">if</span> (result-&gt;<span class="hljs-built_in">IsNumber</span>()) &#123;<br>        std::cout &lt;&lt; v8::Int32::<span class="hljs-built_in">Cast</span>(*result)-&gt;<span class="hljs-built_in">Value</span>() &lt;&lt;<span class="hljs-string">&quot;\n&quot;</span>;<br>      &#125;<br>  &#125;<br>  isolate-&gt;<span class="hljs-built_in">Dispose</span>();<br><br>  v8::V8::<span class="hljs-built_in">Dispose</span>();<br>  v8::V8::<span class="hljs-built_in">ShutdownPlatform</span>();<br><br>  <span class="hljs-keyword">delete</span> create_params.array_buffer_allocator;<br><br>  <span class="hljs-comment">// Delete the platform explicitly here to write the tracing output to the</span><br>  <span class="hljs-comment">// tracing file.</span><br>  g_platform.<span class="hljs-built_in">reset</span>();<br>  <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br><br>&#125;  <span class="hljs-comment">// namespace demo</span><br><br><span class="hljs-function"><span class="hljs-type">int</span> <span class="hljs-title">main</span><span class="hljs-params">(<span class="hljs-type">int</span> argc, <span class="hljs-type">char</span>* argv[])</span> </span>&#123;<br>  <span class="hljs-keyword">return</span> demo::<span class="hljs-built_in">Main</span>(argc, argv);<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>解释：</p>
+<p>如代码，可以看到js是声明了3个函数，分别为a，b，c函数。通过create_params.code_event_handler &#x3D; OnJitEvent设置了jit代码执行处理。当执行js时候，会回调OnJitEvent函数。当js函数a，b，c调用时候，同时代码也产生了v8::JitCodeEvent::CODE_ADDED操作。</p>
+<p>输出：</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs ruby">lyg<span class="hljs-variable">@lyg</span>-ThinkCentre-M8600t-<span class="hljs-variable constant_">N000</span><span class="hljs-symbol">:/win/code/v8-pc/v8</span><span class="hljs-variable">$ </span>out.gn/x64.release/demo <br><span class="hljs-variable constant_">CODE_ADDED</span> js <span class="hljs-symbol">function:</span> <span class="hljs-symbol">Script:</span>~ <span class="hljs-symbol">:</span><span class="hljs-number">1</span><br><span class="hljs-variable constant_">CODE_ADDED</span> js <span class="hljs-symbol">function:</span> <span class="hljs-symbol">LazyCompile:</span>~a <span class="hljs-symbol">:</span><span class="hljs-number">1</span><br><span class="hljs-variable constant_">CODE_ADDED</span> js <span class="hljs-symbol">function:</span> <span class="hljs-symbol">LazyCompile:</span>~b <span class="hljs-symbol">:</span><span class="hljs-number">2</span><br><span class="hljs-variable constant_">CODE_ADDED</span> js <span class="hljs-symbol">function:</span> <span class="hljs-symbol">LazyCompile:</span>~c <span class="hljs-symbol">:</span><span class="hljs-number">3</span><br></code></pre></td></tr></table></figure>
+<p>打印解释：</p>
+<p>LazyCompile:~a :1</p>
+<p>延时编译：js函数名：js函数所在的行数</p>
+<p>同步知乎：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/186219660">https://zhuanlan.zhihu.com/p/186219660</a></p>
+
+            </div>
+            <hr>
+            <div>
+              <div class="post-metas mb-3">
+                
+                  <div class="post-meta mr-3">
+                    <i class="iconfont icon-category"></i>
+                    
+                      <a class="hover-with-bg" href="/categories/V8/">V8</a>
+                    
+                  </div>
+                
+                
+                  <div class="post-meta">
+                    <i class="iconfont icon-tags"></i>
+                    
+                      <a class="hover-with-bg" href="/tags/%E6%8C%87%E5%8D%97/">指南</a>
+                    
+                      <a class="hover-with-bg" href="/tags/Isolate/">Isolate</a>
+                    
+                  </div>
+                
+              </div>
+              
+                <p class="note note-warning">
+                  
+                    本博客所有文章除特别声明外，均采用 <a target="_blank" href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh" rel="nofollow noopener noopener">CC BY-SA 4.0 协议</a> ，转载请注明出处！
+                  
+                </p>
+              
+              
+                <div class="post-prevnext">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/05/04/V8%E6%8E%A5%E5%8F%A3%E6%8C%87%E5%8D%97-ArrayBuffer-Allocator/">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">V8接口指南--ArrayBuffer::Allocator</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/05/04/V8%E6%8E%A5%E5%8F%A3%E6%8C%87%E5%8D%97-StartupData/">
+                        <span class="hidden-mobile">V8接口指南--StartupData</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+              <!-- Comments -->
+              <article class="comments" id="comments" lazyload>
+                
+                  
+                
+                
+
+              </article>
+            
+          </article>
+        </div>
+      </div>
+    </div>
+    
+      <div class="d-none d-lg-block col-lg-2 toc-container" id="toc-ctn">
+        <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+      </div>
+    
+  </div>
+</div>
+
+<!-- Custom -->
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v"
+                 for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+
+    
+  </main>
+
+  <footer class="text-center mt-5 py-3">
+  <div class="footer-content">
+     <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+  </div>
+  
+  <div class="statistics">
+    
+    
+
+    
+      
+        <!-- 不蒜子统计PV -->
+        <span id="busuanzi_container_site_pv" style="display: none">
+            总访问量 
+            <span id="busuanzi_value_site_pv"></span>
+             次
+          </span>
+      
+      
+        <!-- 不蒜子统计UV -->
+        <span id="busuanzi_container_site_uv" style="display: none">
+            总访客数 
+            <span id="busuanzi_value_site_uv"></span>
+             人
+          </span>
+      
+    
+  </div>
+
+
+  
+
+  
+</footer>
+
+
+  <!-- SCRIPTS -->
+  
+  <script  src="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" ></script>
+<script  src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+<!-- Plugins -->
+
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+  
+
+
+
+  
+    <script  src="https://cdn.jsdelivr.net/npm/tocbot@4/dist/tocbot.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/anchor-js@4/anchor.min.js" ></script>
+  
+  
+    <script defer src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js" ></script>
+  
+
+
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+  <script  src="https://cdn.jsdelivr.net/npm/typed.js@2/lib/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var title = document.getElementById('subtitle').title;
+      
+        typing(title);
+      
+    })(window, document);
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+<!-- 主题的启动项 保持在最底部 -->
+<script  src="/js/boot.js" ></script>
+
+
+</body>
+</html>

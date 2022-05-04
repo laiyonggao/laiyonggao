@@ -1,0 +1,536 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/touxiang.jpg">
+  <link rel="icon" href="/img/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Laiyonggao">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="前言上一章节讲到html标签解析生成AtomicHTMLToken。这一章节主要讲解AtomicHTMLToken到生成HtmlElement AtomicHTMLToken概念1234567891011121314151617181920class CORE_EXPORT AtomicHTMLToken &amp;#123;...... private:  HTMLToken::TokenType ty">
+<meta property="og:type" content="article">
+<meta property="og:title" content="浏览器内核原理--Chromium Blink Html解析(2)">
+<meta property="og:url" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90-2/index.html">
+<meta property="og:site_name" content="赖勇高">
+<meta property="og:description" content="前言上一章节讲到html标签解析生成AtomicHTMLToken。这一章节主要讲解AtomicHTMLToken到生成HtmlElement AtomicHTMLToken概念1234567891011121314151617181920class CORE_EXPORT AtomicHTMLToken &amp;#123;...... private:  HTMLToken::TokenType ty">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90-2/HTMLElementStack.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90-2/%E5%87%BA%E6%A0%88%E5%92%8C%E5%85%A5%E6%A0%88.jpg">
+<meta property="article:published_time" content="2022-05-04T07:01:36.000Z">
+<meta property="article:modified_time" content="2022-05-04T07:14:33.353Z">
+<meta property="article:author" content="Laiyonggao">
+<meta property="article:tag" content="Parse">
+<meta property="article:tag" content="Token">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90-2/HTMLElementStack.jpg">
+  
+  
+  <title>浏览器内核原理--Chromium Blink Html解析(2) - 赖勇高</title>
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css" />
+
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4/github-markdown.min.css" />
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hint.css@2/hint.min.css" />
+
+  
+    
+    
+      
+      <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@10/styles/github-gist.min.css" />
+    
+  
+
+  
+    <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css" />
+  
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_ba1fz6golrf.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+<!-- 自定义样式保持在最底部 -->
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.8.14","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"right","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"copy_btn":true,"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  <header style="height: 70vh;">
+    <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>赖勇高</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div class="banner" id="banner" parallax=true
+         style="background: url('/img/default.png') no-repeat center center;
+           background-size: cover;">
+      <div class="full-bg-img">
+        <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+          <div class="page-header text-center fade-in-up">
+            <span class="h2" id="subtitle" title="浏览器内核原理--Chromium Blink Html解析(2)">
+              
+            </span>
+
+            
+              <div class="mt-3">
+  
+  
+    <span class="post-meta">
+      <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+      <time datetime="2022-05-04 15:01" pubdate>
+        2022年5月4日 下午
+      </time>
+    </span>
+  
+</div>
+
+<div class="mt-1">
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-chart"></i>
+      11k 字
+    </span>
+  
+
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-clock-fill"></i>
+      
+      
+      92 分钟
+    </span>
+  
+
+  
+  
+</div>
+
+            
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="d-none d-lg-block col-lg-2"></div>
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div class="py-5" id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">浏览器内核原理--Chromium Blink Html解析(2)</h1>
+            
+            <div class="markdown-body">
+              <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>上一章节讲到html标签解析生成AtomicHTMLToken。这一章节主要讲解AtomicHTMLToken到生成HtmlElement</p>
+<h2 id="AtomicHTMLToken概念"><a href="#AtomicHTMLToken概念" class="headerlink" title="AtomicHTMLToken概念"></a>AtomicHTMLToken概念</h2><figure class="highlight c++"><table><tr><td class="gutter"><div class="code-wrapper"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></div></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">CORE_EXPORT</span> AtomicHTMLToken &#123;<br>......<br><br> <span class="hljs-keyword">private</span>:<br>  HTMLToken::TokenType type_;<br><br>  <span class="hljs-comment">// &quot;name&quot; for DOCTYPE, StartTag, and EndTag</span><br>  AtomicString name_;<br><br>  <span class="hljs-comment">// &quot;data&quot; for Comment, &quot;characters&quot; for Character</span><br>  String data_;<br><br>  <span class="hljs-comment">// For DOCTYPE</span><br>  std::unique_ptr&lt;DoctypeData&gt; doctype_data_;<br><br>  <span class="hljs-comment">// For StartTag and EndTag</span><br>  <span class="hljs-type">bool</span> self_closing_;<br><br>  Vector&lt;Attribute&gt; attributes_;<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>由上可以看到一个标签的AtomicHTMLToken 数据结构：<br>type_ 表示Token类型，有7个类型，下面详细介绍<br>name_ 表示标签的名字，如html，body，div等<br>attributes_表示标签属性，如id，class，style等</p>
+<h2 id="TokenType类型"><a href="#TokenType类型" class="headerlink" title="TokenType类型"></a>TokenType类型</h2><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">enum</span> <span class="hljs-title class_">TokenType</span> &#123;<br>  kUninitialized,<br>  DOCTYPE,<br>  kStartTag,<br>  kEndTag,<br>  kComment,<br>  kCharacter,<br>  kEndOfFile,<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>kStartTag是开标签，例如&lt;html&gt;,&lt;body&gt;,&lt;div&gt;,&lt;p&gt;等<br>kEndTag是闭标签，例如&lt;&#x2F;html\&gt;,&lt;&#x2F;body&gt;,&lt;&#x2F;div&gt;,&lt;&#x2F;p&gt;等<br>kComment是注释标签，例如&lt;!-- --&gt;<br>kCharacter是标签内的文本，例如script标签内的文本，style标签内的文本等<br>kEndOfFile是文件结束符</p>
+<h2 id="插入状态"><a href="#插入状态" class="headerlink" title="插入状态"></a>插入状态</h2><p>什么是插入状态？<br>我理解的意思就是在构建dom tree时候，处理不同的Token过程中不同插入状态，其意义就是为了处理标签异常情况。<br>插入有几个状态？</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-string">&quot;initial&quot;</span><span class="hljs-string">&quot;before html&quot;</span>, <span class="hljs-string">&quot;before head&quot;</span>, <span class="hljs-string">&quot;in head&quot;</span>, <span class="hljs-string">&quot;in head noscript&quot;</span>, <span class="hljs-string">&quot;after head&quot;</span>, <span class="hljs-string">&quot;in body&quot;</span>, <span class="hljs-string">&quot;text&quot;</span>, <span class="hljs-string">&quot;in table&quot;</span>, <span class="hljs-string">&quot;in table text&quot;</span>, <span class="hljs-string">&quot;in caption&quot;</span>, <span class="hljs-string">&quot;in column group&quot;</span>, <span class="hljs-string">&quot;in table body&quot;</span>, <span class="hljs-string">&quot;in row&quot;</span>, <span class="hljs-string">&quot;in cell&quot;</span>, <span class="hljs-string">&quot;in select&quot;</span>, <span class="hljs-string">&quot;in select in table&quot;</span>, <span class="hljs-string">&quot;in template&quot;</span>, <span class="hljs-string">&quot;after body&quot;</span>, <span class="hljs-string">&quot;in frameset&quot;</span>, <span class="hljs-string">&quot;after frameset&quot;</span>, <span class="hljs-string">&quot;after after body&quot;</span>, 和<span class="hljs-string">&quot;after after frameset&quot;</span><br></code></pre></td></tr></table></figure>
+<p>总共有23个解析状态，每个状态的意思是一目了然，我就不一一解释了。代码如下</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">enum</span> <span class="hljs-title class_">InsertionMode</span> &#123;<br>    kInitialMode,<br>    kBeforeHTMLMode,<br>    kBeforeHeadMode,<br>    kInHeadMode,<br>    kInHeadNoscriptMode,<br>    kAfterHeadMode,<br>    kTemplateContentsMode,<br>    kInBodyMode,<br>    kTextMode,<br>    kInTableMode,<br>    kInTableTextMode,<br>    kInCaptionMode,<br>    kInColumnGroupMode,<br>    kInTableBodyMode,<br>    kInRowMode,<br>    kInCellMode,<br>    kInSelectMode,<br>    kInSelectInTableMode,<br>    kAfterBodyMode,<br>    kInFramesetMode,<br>    kAfterFramesetMode,<br>    kAfterAfterBodyMode,<br>    kAfterAfterFramesetMode,<br>  &#125;;<br></code></pre></td></tr></table></figure>
+<h2 id="处理Token"><a href="#处理Token" class="headerlink" title="处理Token"></a>处理Token</h2><p>不同的Token类型有不同的处理方式</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLTreeBuilder::ProcessToken</span><span class="hljs-params">(AtomicHTMLToken* token)</span> </span>&#123;<br>  <span class="hljs-keyword">if</span> (token-&gt;<span class="hljs-built_in">GetType</span>() == HTMLToken::kCharacter) &#123;<br>    <span class="hljs-built_in">ProcessCharacter</span>(token);<br>    <span class="hljs-keyword">return</span>;<br>  &#125;<br><br>  <span class="hljs-comment">// Any non-character token needs to cause us to flush any pending text</span><br>  <span class="hljs-comment">// immediately. <span class="hljs-doctag">NOTE:</span> flush() can cause any queued tasks to execute, possibly</span><br>  <span class="hljs-comment">// re-entering the parser.</span><br>  tree_.<span class="hljs-built_in">Flush</span>(kFlushAlways);<br>  should_skip_leading_newline_ = <span class="hljs-literal">false</span>;<br><br>  <span class="hljs-keyword">switch</span> (token-&gt;<span class="hljs-built_in">GetType</span>()) &#123;<br>    <span class="hljs-keyword">case</span> HTMLToken::kUninitialized:<br>    <span class="hljs-keyword">case</span> HTMLToken::kCharacter:<br>      <span class="hljs-built_in">NOTREACHED</span>();<br>      <span class="hljs-keyword">break</span>;<br>    <span class="hljs-keyword">case</span> HTMLToken::DOCTYPE:<br>      <span class="hljs-built_in">ProcessDoctypeToken</span>(token);<br>      <span class="hljs-keyword">break</span>;<br>    <span class="hljs-keyword">case</span> HTMLToken::kStartTag:<br>      <span class="hljs-built_in">ProcessStartTag</span>(token);<br>      <span class="hljs-keyword">break</span>;<br>    <span class="hljs-keyword">case</span> HTMLToken::kEndTag:<br>      <span class="hljs-built_in">ProcessEndTag</span>(token);<br>      <span class="hljs-keyword">break</span>;<br>    <span class="hljs-keyword">case</span> HTMLToken::kComment:<br>      <span class="hljs-built_in">ProcessComment</span>(token);<br>      <span class="hljs-keyword">break</span>;<br>    <span class="hljs-keyword">case</span> HTMLToken::kEndOfFile:<br>      <span class="hljs-built_in">ProcessEndOfFile</span>(token);<br>      <span class="hljs-keyword">break</span>;<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>这里举个详细讲解下StartTag处理</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLTreeBuilder::ProcessStartTag</span><span class="hljs-params">(AtomicHTMLToken* token)</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK_EQ</span>(token-&gt;<span class="hljs-built_in">GetType</span>(), HTMLToken::kStartTag);<br>  <span class="hljs-keyword">switch</span> (<span class="hljs-built_in">GetInsertionMode</span>()) &#123;<br>    <span class="hljs-keyword">case</span> kInitialMode:<br>      <span class="hljs-built_in">DCHECK_EQ</span>(<span class="hljs-built_in">GetInsertionMode</span>(), kInitialMode);<br>      <span class="hljs-built_in">DefaultForInitial</span>(); <span class="hljs-comment">// 设置插入状态为kBeforeHTMLMode</span><br>    <span class="hljs-comment">// Fall through.</span><br>    <span class="hljs-keyword">case</span> kBeforeHTMLMode:<br>      <span class="hljs-built_in">DCHECK_EQ</span>(<span class="hljs-built_in">GetInsertionMode</span>(), kBeforeHTMLMode);<br>      <span class="hljs-keyword">if</span> (token-&gt;<span class="hljs-built_in">GetName</span>() == htmlTag) &#123; <span class="hljs-comment">// 如果为html开标签则执行如下流程</span><br>        tree_.<span class="hljs-built_in">InsertHTMLHtmlStartTagBeforeHTML</span>(token);  <span class="hljs-comment">// 插入html element</span><br>        <span class="hljs-built_in">SetInsertionMode</span>(kBeforeHeadMode);  <span class="hljs-comment">// 设置插入状态为kBeforeHeadMode</span><br>        <span class="hljs-keyword">return</span>;<br>      &#125;<br>      <span class="hljs-built_in">DefaultForBeforeHTML</span>(); <span class="hljs-comment">// 如果在kBeforeHTMLMode下，token不是html则需要默认插入个html element</span><br>    <span class="hljs-comment">// Fall through.</span><br>    <span class="hljs-keyword">case</span> kBeforeHeadMode:<br>      <span class="hljs-built_in">DCHECK_EQ</span>(<span class="hljs-built_in">GetInsertionMode</span>(), kBeforeHeadMode);<br>      <span class="hljs-keyword">if</span> (token-&gt;<span class="hljs-built_in">GetName</span>() == htmlTag) &#123; <span class="hljs-comment">// 在kBeforeHeadMode状态下如果当前处理的是html开标签</span><br>        <span class="hljs-built_in">ProcessHtmlStartTagForInBody</span>(token); <span class="hljs-comment">// 这里是要处理一些错误的，因为kBeforeHeadMode状态下已经插入html，但是当前的要处理的这个token又是html说明标签有问题</span><br>        <span class="hljs-keyword">return</span>;<br>      &#125;<br>      <span class="hljs-keyword">if</span> (token-&gt;<span class="hljs-built_in">GetName</span>() == headTag) &#123; <span class="hljs-comment">// 在kBeforeHeadMode状态下如果当前处理的是head开标签</span><br>        tree_.<span class="hljs-built_in">InsertHTMLHeadElement</span>(token); <span class="hljs-comment">// 插入head element</span><br>        <span class="hljs-built_in">SetInsertionMode</span>(kInHeadMode); <span class="hljs-comment">// 设置插入状态为kInHeadMode</span><br>        <span class="hljs-keyword">return</span>;<br>      &#125;<br>      <span class="hljs-built_in">DefaultForBeforeHead</span>(); <span class="hljs-comment">// 如果在kBeforeHeadMode下，token都不是html和head，则默认插入一个head element</span><br>    <span class="hljs-comment">// Fall through.</span><br>    <span class="hljs-keyword">case</span> kInHeadMode:<br>      <span class="hljs-built_in">DCHECK_EQ</span>(<span class="hljs-built_in">GetInsertionMode</span>(), kInHeadMode);<br>      <span class="hljs-keyword">if</span> (<span class="hljs-built_in">ProcessStartTagForInHead</span>(token)) <span class="hljs-comment">// 正常处理token</span><br>        <span class="hljs-keyword">return</span>;<br>      <span class="hljs-built_in">DefaultForInHead</span>(); <span class="hljs-comment">// 默认插入一个head闭标签</span><br>    <span class="hljs-comment">// Fall through.</span><br>    <span class="hljs-keyword">case</span> kAfterHeadMode: <span class="hljs-comment">// kAfterHeadMode状态是在endTag处理时候设置的</span><br>      <span class="hljs-built_in">DCHECK_EQ</span>(<span class="hljs-built_in">GetInsertionMode</span>(), kAfterHeadMode);<br>      <span class="hljs-keyword">if</span> (token-&gt;<span class="hljs-built_in">GetName</span>() == htmlTag) &#123; <span class="hljs-comment">// 在kAfterHeadMode状态下如果当前处理的是html开标签</span><br>        <span class="hljs-built_in">ProcessHtmlStartTagForInBody</span>(token);  <span class="hljs-comment">// 这里是要处理一些错误的，因为kAfterHeadMode状态下已经插入html，但是当前的要处理的这个token又是html说明标签有问题</span><br>        <span class="hljs-keyword">return</span>;<br>      &#125;<br>      <span class="hljs-keyword">if</span> (token-&gt;<span class="hljs-built_in">GetName</span>() == bodyTag) &#123; <span class="hljs-comment">// 在kAfterHeadMode状态下如果当前处理的是body开标签</span><br>        frameset_ok_ = <span class="hljs-literal">false</span>;<br>        tree_.<span class="hljs-built_in">InsertHTMLBodyElement</span>(token); <span class="hljs-comment">// 插入body element</span><br>        <span class="hljs-built_in">SetInsertionMode</span>(kInBodyMode); <span class="hljs-comment">// 设置插入状态为kInBodyMode</span><br>        <span class="hljs-keyword">return</span>;<br>      &#125;<br>      <span class="hljs-keyword">if</span> (token-&gt;<span class="hljs-built_in">GetName</span>() == framesetTag) &#123;<br>        tree_.<span class="hljs-built_in">InsertHTMLElement</span>(token);<br>        <span class="hljs-built_in">SetInsertionMode</span>(kInFramesetMode);<br>        <span class="hljs-keyword">return</span>;<br>      &#125;<br>      <span class="hljs-keyword">if</span> (token-&gt;<span class="hljs-built_in">GetName</span>() == baseTag || token-&gt;<span class="hljs-built_in">GetName</span>() == basefontTag ||<br>          token-&gt;<span class="hljs-built_in">GetName</span>() == bgsoundTag || token-&gt;<span class="hljs-built_in">GetName</span>() == linkTag ||<br>          token-&gt;<span class="hljs-built_in">GetName</span>() == metaTag || token-&gt;<span class="hljs-built_in">GetName</span>() == noframesTag ||<br>          token-&gt;<span class="hljs-built_in">GetName</span>() == scriptTag || token-&gt;<span class="hljs-built_in">GetName</span>() == styleTag ||<br>          token-&gt;<span class="hljs-built_in">GetName</span>() == templateTag || token-&gt;<span class="hljs-built_in">GetName</span>() == titleTag) &#123;<br>        <span class="hljs-built_in">ParseError</span>(token);<br>        <span class="hljs-built_in">DCHECK</span>(tree_.<span class="hljs-built_in">Head</span>());<br>        tree_.<span class="hljs-built_in">OpenElements</span>()-&gt;<span class="hljs-built_in">PushHTMLHeadElement</span>(tree_.<span class="hljs-built_in">HeadStackItem</span>());<br>        <span class="hljs-built_in">ProcessStartTagForInHead</span>(token);<br>        tree_.<span class="hljs-built_in">OpenElements</span>()-&gt;<span class="hljs-built_in">RemoveHTMLHeadElement</span>(tree_.<span class="hljs-built_in">Head</span>());<br>        <span class="hljs-keyword">return</span>;<br>      &#125;<br>      <span class="hljs-keyword">if</span> (token-&gt;<span class="hljs-built_in">GetName</span>() == headTag) &#123;<br>        <span class="hljs-built_in">ParseError</span>(token);<br>        <span class="hljs-keyword">return</span>;<br>      &#125;<br>      <span class="hljs-built_in">DefaultForAfterHead</span>();<br>    <span class="hljs-comment">// Fall through</span><br>    <span class="hljs-keyword">case</span> kInBodyMode:<br>      <span class="hljs-built_in">DCHECK_EQ</span>(<span class="hljs-built_in">GetInsertionMode</span>(), kInBodyMode);<br>      <span class="hljs-built_in">ProcessStartTagForInBody</span>(token); <span class="hljs-comment">// 处理token</span><br>      <span class="hljs-keyword">break</span>;<br>..........................................<br>..........以下处理都差不多的逻辑..............<br>..........................................<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>InsertHTMLElement函数</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLConstructionSite::InsertHTMLElement</span><span class="hljs-params">(AtomicHTMLToken* token)</span> </span>&#123;<br>  Element* element = <span class="hljs-built_in">CreateElement</span>(token, xhtmlNamespaceURI);<br>  <span class="hljs-built_in">AttachLater</span>(<span class="hljs-built_in">CurrentNode</span>(), element); <span class="hljs-comment">// 设置父节点</span><br>  open_elements_.<span class="hljs-built_in">Push</span>(HTMLStackItem::<span class="hljs-built_in">Create</span>(element, token)); <span class="hljs-comment">// 把htmlElement压入堆中</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<p>open_elements_的类型是HTMLElementStack</p>
+<h2 id="HTMLElementStack讲解"><a href="#HTMLElementStack讲解" class="headerlink" title="HTMLElementStack讲解"></a>HTMLElementStack讲解</h2><p><img src="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90-2/HTMLElementStack.jpg" srcset="/img/loading.gif" lazyload alt="HTMLElementStack"><br>HTMLElementStack是一个栈的数据结构，符合先入后出的方式。HTMLElementStack主要有以下几个数据：<br>1.当前的栈顶元素ElementRecord<br>2.根节点<br>3.head节点<br>4.body节点<br>5.当前的栈深度</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">HTMLElementStack</span> &#123;<br>.......<br> <span class="hljs-keyword">private</span>:<br>  <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">PushCommon</span><span class="hljs-params">(HTMLStackItem*)</span></span>;<br>  <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">PushRootNodeCommon</span><span class="hljs-params">(HTMLStackItem*)</span></span>;<br>  <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">PopCommon</span><span class="hljs-params">()</span></span>;<br>  <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">RemoveNonTopCommon</span><span class="hljs-params">(Element*)</span></span>;<br><br>  Member&lt;ElementRecord&gt; top_; <span class="hljs-comment">// 栈顶部元素</span><br><br>  <span class="hljs-comment">// We remember the root node, &lt;head&gt; and &lt;body&gt; as they are pushed. Their</span><br>  <span class="hljs-comment">// ElementRecords keep them alive. The root node is never popped.</span><br>  <span class="hljs-comment">// <span class="hljs-doctag">FIXME:</span> We don&#x27;t currently require type-specific information about these</span><br>  <span class="hljs-comment">// elements so we haven&#x27;t yet bothered to plumb the types all the way down</span><br>  <span class="hljs-comment">// through createElement, etc.</span><br>  Member&lt;ContainerNode&gt; root_node_; <span class="hljs-comment">// 根节点</span><br>  Member&lt;Element&gt; head_element_; <span class="hljs-comment">// head节点</span><br>  Member&lt;Element&gt; body_element_; <span class="hljs-comment">// body节点</span><br>  <span class="hljs-type">unsigned</span> stack_depth_; <span class="hljs-comment">// 栈深度</span><br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>ElementRecord是组成HTMLElementStack栈的成员，ElementRecord的next_保存着前一个压栈的元素，所以这样就构成了栈的数据结构。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">class</span> <span class="hljs-title class_">ElementRecord</span> <span class="hljs-keyword">final</span> : <span class="hljs-keyword">public</span> GarbageCollected&lt;ElementRecord&gt; &#123;<br>   <span class="hljs-built_in">WTF_MAKE_NONCOPYABLE</span>(ElementRecord);<br><br>  <span class="hljs-keyword">public</span>:<br>   <span class="hljs-function">Element* <span class="hljs-title">GetElement</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>&#123; <span class="hljs-keyword">return</span> item_-&gt;<span class="hljs-built_in">GetElement</span>(); &#125;<br>   <span class="hljs-function">ContainerNode* <span class="hljs-title">GetNode</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>&#123; <span class="hljs-keyword">return</span> item_-&gt;<span class="hljs-built_in">GetNode</span>(); &#125;<br>   <span class="hljs-function"><span class="hljs-type">const</span> AtomicString&amp; <span class="hljs-title">NamespaceURI</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>&#123; <span class="hljs-keyword">return</span> item_-&gt;<span class="hljs-built_in">NamespaceURI</span>(); &#125;<br>   <span class="hljs-function">HTMLStackItem* <span class="hljs-title">StackItem</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>&#123; <span class="hljs-keyword">return</span> item_; &#125;<br>   <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">ReplaceElement</span><span class="hljs-params">(HTMLStackItem*)</span></span>;<br><br>   <span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">IsAbove</span><span class="hljs-params">(ElementRecord*)</span> <span class="hljs-type">const</span></span>;<br><br>   <span class="hljs-function">ElementRecord* <span class="hljs-title">Next</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>&#123; <span class="hljs-keyword">return</span> next_.<span class="hljs-built_in">Get</span>(); &#125;<br><br>   <span class="hljs-built_in">DECLARE_TRACE</span>();<br><br>  <span class="hljs-keyword">private</span>:<br>   <span class="hljs-keyword">friend</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">HTMLElementStack</span>;<br><br>   <span class="hljs-built_in">ElementRecord</span>(HTMLStackItem*, ElementRecord*);<br><br>   <span class="hljs-function">ElementRecord* <span class="hljs-title">ReleaseNext</span><span class="hljs-params">()</span> </span>&#123; <span class="hljs-keyword">return</span> next_.<span class="hljs-built_in">Release</span>(); &#125;<br>   <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">SetNext</span><span class="hljs-params">(ElementRecord* next)</span> </span>&#123; next_ = next; &#125;<br><br>   Member&lt;HTMLStackItem&gt; item_; <span class="hljs-comment">// 节点信息（记录了node，属性等）</span><br>   Member&lt;ElementRecord&gt; next_; <span class="hljs-comment">// 上一个压栈的Element ，这里就构成了栈的数据结构</span><br> &#125;;<br></code></pre></td></tr></table></figure>
+<h2 id="栈的数据结构变化"><a href="#栈的数据结构变化" class="headerlink" title="栈的数据结构变化"></a>栈的数据结构变化</h2><p>html代码</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-tag">&lt;<span class="hljs-name">html</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">body</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span><br>      <span class="hljs-tag">&lt;<span class="hljs-name">p</span>&gt;</span><br>        Hello Blink<br>      <span class="hljs-tag">&lt;/<span class="hljs-name">p</span>&gt;</span><br>    <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br>  <span class="hljs-tag">&lt;/<span class="hljs-name">body</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">html</span>&gt;</span><br></code></pre></td></tr></table></figure>
+<p>根据html代码查看栈变化如下图：<br><img src="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90-2/%E5%87%BA%E6%A0%88%E5%92%8C%E5%85%A5%E6%A0%88.jpg" srcset="/img/loading.gif" lazyload alt="出栈和入栈"><br><strong>入栈函数：</strong><br>root，html，head，body，普通标签分别对应不同的入栈函数，主要是为了设置成员变量，代码如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::PushRootNode</span><span class="hljs-params">(HTMLStackItem* root_item)</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(root_item-&gt;<span class="hljs-built_in">IsDocumentFragmentNode</span>());<br>  <span class="hljs-built_in">PushRootNodeCommon</span>(root_item);<br>&#125;<br><br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::PushHTMLHtmlElement</span><span class="hljs-params">(HTMLStackItem* item)</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(item-&gt;<span class="hljs-built_in">HasTagName</span>(htmlTag));<br>  <span class="hljs-built_in">PushRootNodeCommon</span>(item);<br>&#125;<br><br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::PushRootNodeCommon</span><span class="hljs-params">(HTMLStackItem* root_item)</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(!top_);<br>  <span class="hljs-built_in">DCHECK</span>(!root_node_);<br>  root_node_ = root_item-&gt;<span class="hljs-built_in">GetNode</span>();<br>  <span class="hljs-built_in">PushCommon</span>(root_item);<br>&#125;<br><br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::PushHTMLHeadElement</span><span class="hljs-params">(HTMLStackItem* item)</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(item-&gt;<span class="hljs-built_in">HasTagName</span>(HTMLNames::headTag));<br>  <span class="hljs-built_in">DCHECK</span>(!head_element_);<br>  head_element_ = item-&gt;<span class="hljs-built_in">GetElement</span>();<br>  <span class="hljs-built_in">PushCommon</span>(item);<br>&#125;<br><br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::PushHTMLBodyElement</span><span class="hljs-params">(HTMLStackItem* item)</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(item-&gt;<span class="hljs-built_in">HasTagName</span>(HTMLNames::bodyTag));<br>  <span class="hljs-built_in">DCHECK</span>(!body_element_);<br>  body_element_ = item-&gt;<span class="hljs-built_in">GetElement</span>();<br>  <span class="hljs-built_in">PushCommon</span>(item);<br>&#125;<br><br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::Push</span><span class="hljs-params">(HTMLStackItem* item)</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(!item-&gt;<span class="hljs-built_in">HasTagName</span>(htmlTag));<br>  <span class="hljs-built_in">DCHECK</span>(!item-&gt;<span class="hljs-built_in">HasTagName</span>(headTag));<br>  <span class="hljs-built_in">DCHECK</span>(!item-&gt;<span class="hljs-built_in">HasTagName</span>(bodyTag));<br>  <span class="hljs-built_in">DCHECK</span>(root_node_);<br>  <span class="hljs-built_in">PushCommon</span>(item);<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>最终都会调用PushCommon函数</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::PushCommon</span><span class="hljs-params">(HTMLStackItem* item)</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(root_node_);<br><br>  stack_depth_++;<br>  top_ = <span class="hljs-keyword">new</span> <span class="hljs-built_in">ElementRecord</span>(item, top_.<span class="hljs-built_in">Release</span>()); <span class="hljs-comment">//设置栈顶</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<p><strong>出栈函数：</strong><br>head，body分别对应不同的出栈函数，注意这里没有root和html出栈函数，其实这里不会对html单独出栈的，只有一个PopAll函数进行清空栈。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::PopHTMLHeadElement</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK_EQ</span>(<span class="hljs-built_in">Top</span>(), head_element_);<br>  head_element_ = <span class="hljs-literal">nullptr</span>;<br>  <span class="hljs-built_in">PopCommon</span>();<br>&#125;<br><br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::PopHTMLBodyElement</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK_EQ</span>(<span class="hljs-built_in">Top</span>(), body_element_);<br>  body_element_ = <span class="hljs-literal">nullptr</span>;<br>  <span class="hljs-built_in">PopCommon</span>();<br>&#125;<br><br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::PopAll</span><span class="hljs-params">()</span> </span>&#123;<br>  root_node_ = <span class="hljs-literal">nullptr</span>;<br>  head_element_ = <span class="hljs-literal">nullptr</span>;<br>  body_element_ = <span class="hljs-literal">nullptr</span>;<br>  stack_depth_ = <span class="hljs-number">0</span>;<br>  <span class="hljs-keyword">while</span> (top_) &#123;<br>    Node&amp; node = *<span class="hljs-built_in">TopNode</span>();<br>    <span class="hljs-keyword">if</span> (node.<span class="hljs-built_in">IsElementNode</span>()) &#123;<br>      <span class="hljs-built_in">ToElement</span>(node).<span class="hljs-built_in">FinishParsingChildren</span>();<br>      <span class="hljs-keyword">if</span> (<span class="hljs-built_in">isHTMLSelectElement</span>(node))<br>        <span class="hljs-built_in">ToHTMLFormControlElement</span>(node).<span class="hljs-built_in">SetBlocksFormSubmission</span>(<span class="hljs-literal">true</span>);<br>    &#125;<br>    top_ = top_-&gt;<span class="hljs-built_in">ReleaseNext</span>();<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>普通标签的出栈函数，实现原理就是识别到栈内最近的同名标签则停止出栈，例如当前的tag_name标签是Div，则识别到栈内最近的Div标签则停止出栈，这样div开标签和闭标签就会一一对应起来，div下的子节点完毕了。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::PopUntil</span><span class="hljs-params">(<span class="hljs-type">const</span> AtomicString&amp; tag_name)</span> </span>&#123;<br>  <span class="hljs-keyword">while</span> (!<span class="hljs-built_in">TopStackItem</span>()-&gt;<span class="hljs-built_in">MatchesHTMLTag</span>(tag_name)) &#123; <span class="hljs-comment">// 是否是同名标签</span><br>    <span class="hljs-comment">// pop() will ASSERT if a &lt;body&gt;, &lt;head&gt; or &lt;html&gt; will be popped.</span><br>    <span class="hljs-built_in">Pop</span>(); <br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>最终都会执行到PopCommon出栈函数，PopCommon函数作用：<br>1.设置栈顶为前一个入栈的元素<br>2.栈深度-1</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLElementStack::PopCommon</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(!<span class="hljs-built_in">TopStackItem</span>()-&gt;<span class="hljs-built_in">HasTagName</span>(htmlTag));<br>  <span class="hljs-built_in">DCHECK</span>(!<span class="hljs-built_in">TopStackItem</span>()-&gt;<span class="hljs-built_in">HasTagName</span>(headTag) || !head_element_);<br>  <span class="hljs-built_in">DCHECK</span>(!<span class="hljs-built_in">TopStackItem</span>()-&gt;<span class="hljs-built_in">HasTagName</span>(bodyTag) || !body_element_);<br>  <span class="hljs-built_in">Top</span>()-&gt;<span class="hljs-built_in">FinishParsingChildren</span>();<br>  top_ = top_-&gt;<span class="hljs-built_in">ReleaseNext</span>(); <span class="hljs-comment">// 设置栈顶为前一个入栈的元素</span><br><br>  stack_depth_--; <span class="hljs-comment">// 栈深度-1</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="优化建议"><a href="#优化建议" class="headerlink" title="优化建议"></a>优化建议</h2><p>栈是有深度的，chromium HTMLElementStack栈的深度限制是512，所以标签的嵌套深度不得超过512</p>
+<h2 id="学习建议"><a href="#学习建议" class="headerlink" title="学习建议"></a>学习建议</h2><p>html解析是有一套标准的，可以查看<a target="_blank" rel="noopener" href="https://whatwg-cn.github.io/html/">https://whatwg-cn.github.io/html/</a></p>
+<p>同步知乎：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/50628909">https://zhuanlan.zhihu.com/p/50628909</a></p>
+
+            </div>
+            <hr>
+            <div>
+              <div class="post-metas mb-3">
+                
+                  <div class="post-meta mr-3">
+                    <i class="iconfont icon-category"></i>
+                    
+                      <a class="hover-with-bg" href="/categories/Chromium/">Chromium</a>
+                    
+                  </div>
+                
+                
+                  <div class="post-meta">
+                    <i class="iconfont icon-tags"></i>
+                    
+                      <a class="hover-with-bg" href="/tags/Parse/">Parse</a>
+                    
+                      <a class="hover-with-bg" href="/tags/Token/">Token</a>
+                    
+                  </div>
+                
+              </div>
+              
+                <p class="note note-warning">
+                  
+                    本博客所有文章除特别声明外，均采用 <a target="_blank" href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh" rel="nofollow noopener noopener">CC BY-SA 4.0 协议</a> ，转载请注明出处！
+                  
+                </p>
+              
+              
+                <div class="post-prevnext">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/05/04/V8-bindings-%E8%AE%BE%E8%AE%A1isolate%EF%BC%8Ccontext%EF%BC%8Cworld%EF%BC%8Cframe%E4%B9%8B%E9%97%B4%E7%9A%84%E5%85%B3%E7%B3%BB%EF%BC%88%E7%BF%BB%E8%AF%91%EF%BC%89/">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">V8 bindings 设计isolate，context，world，frame之间的关系（翻译）</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90/">
+                        <span class="hidden-mobile">浏览器内核原理--Chromium Blink Html解析</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+              <!-- Comments -->
+              <article class="comments" id="comments" lazyload>
+                
+                  
+                
+                
+
+              </article>
+            
+          </article>
+        </div>
+      </div>
+    </div>
+    
+      <div class="d-none d-lg-block col-lg-2 toc-container" id="toc-ctn">
+        <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+      </div>
+    
+  </div>
+</div>
+
+<!-- Custom -->
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v"
+                 for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+
+    
+  </main>
+
+  <footer class="text-center mt-5 py-3">
+  <div class="footer-content">
+     <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+  </div>
+  
+  <div class="statistics">
+    
+    
+
+    
+      
+        <!-- 不蒜子统计PV -->
+        <span id="busuanzi_container_site_pv" style="display: none">
+            总访问量 
+            <span id="busuanzi_value_site_pv"></span>
+             次
+          </span>
+      
+      
+        <!-- 不蒜子统计UV -->
+        <span id="busuanzi_container_site_uv" style="display: none">
+            总访客数 
+            <span id="busuanzi_value_site_uv"></span>
+             人
+          </span>
+      
+    
+  </div>
+
+
+  
+
+  
+</footer>
+
+
+  <!-- SCRIPTS -->
+  
+  <script  src="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" ></script>
+<script  src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+<!-- Plugins -->
+
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+  
+
+
+
+  
+    <script  src="https://cdn.jsdelivr.net/npm/tocbot@4/dist/tocbot.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/anchor-js@4/anchor.min.js" ></script>
+  
+  
+    <script defer src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js" ></script>
+  
+
+
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+  <script  src="https://cdn.jsdelivr.net/npm/typed.js@2/lib/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var title = document.getElementById('subtitle').title;
+      
+        typing(title);
+      
+    })(window, document);
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+<!-- 主题的启动项 保持在最底部 -->
+<script  src="/js/boot.js" ></script>
+
+
+</body>
+</html>

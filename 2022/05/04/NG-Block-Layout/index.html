@@ -1,0 +1,571 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/touxiang.jpg">
+  <link rel="icon" href="/img/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Laiyonggao">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="本文讲述的是Block Layout算法（基于InFlow），BlockLayout算法本质上就是计算盒子模型的各个参数值。 排版函数入口是LayoutNGMixin&lt;Base&gt;::UpdateInFlowBlockLayout() ，然后调用到NGBlockNode的Layout函数。 NGBlockNode的输入和输出如下：    输入 输出    LayoutNGBlockFlo">
+<meta property="og:type" content="article">
+<meta property="og:title" content="NG Block Layout">
+<meta property="og:url" content="http://example.com/2022/05/04/NG-Block-Layout/index.html">
+<meta property="og:site_name" content="赖勇高">
+<meta property="og:description" content="本文讲述的是Block Layout算法（基于InFlow），BlockLayout算法本质上就是计算盒子模型的各个参数值。 排版函数入口是LayoutNGMixin&lt;Base&gt;::UpdateInFlowBlockLayout() ，然后调用到NGBlockNode的Layout函数。 NGBlockNode的输入和输出如下：    输入 输出    LayoutNGBlockFlo">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-05-04T09:32:00.000Z">
+<meta property="article:modified_time" content="2022-05-04T09:42:39.713Z">
+<meta property="article:author" content="Laiyonggao">
+<meta property="article:tag" content="NG">
+<meta property="article:tag" content="Layout">
+<meta name="twitter:card" content="summary_large_image">
+  
+  
+  <title>NG Block Layout - 赖勇高</title>
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css" />
+
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4/github-markdown.min.css" />
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hint.css@2/hint.min.css" />
+
+  
+    
+    
+      
+      <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@10/styles/github-gist.min.css" />
+    
+  
+
+  
+    <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css" />
+  
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_ba1fz6golrf.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+<!-- 自定义样式保持在最底部 -->
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.8.14","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"right","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"copy_btn":true,"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  <header style="height: 70vh;">
+    <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>赖勇高</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div class="banner" id="banner" parallax=true
+         style="background: url('/img/default.png') no-repeat center center;
+           background-size: cover;">
+      <div class="full-bg-img">
+        <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+          <div class="page-header text-center fade-in-up">
+            <span class="h2" id="subtitle" title="NG Block Layout">
+              
+            </span>
+
+            
+              <div class="mt-3">
+  
+  
+    <span class="post-meta">
+      <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+      <time datetime="2022-05-04 17:32" pubdate>
+        2022年5月4日 下午
+      </time>
+    </span>
+  
+</div>
+
+<div class="mt-1">
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-chart"></i>
+      7.9k 字
+    </span>
+  
+
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-clock-fill"></i>
+      
+      
+      67 分钟
+    </span>
+  
+
+  
+  
+</div>
+
+            
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="d-none d-lg-block col-lg-2"></div>
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div class="py-5" id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">NG Block Layout</h1>
+            
+            <div class="markdown-body">
+              <p>本文讲述的是Block Layout算法（基于InFlow），BlockLayout算法本质上就是计算盒子模型的各个参数值。</p>
+<p>排版函数入口是LayoutNGMixin&lt;Base&gt;::UpdateInFlowBlockLayout() ，然后调用到NGBlockNode的Layout函数。</p>
+<p>NGBlockNode的输入和输出如下：</p>
+<table>
+<thead>
+<tr>
+<th align="center">输入</th>
+<th align="center">输出</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">LayoutNGBlockFlow</td>
+<td align="center">NGLayoutResult</td>
+</tr>
+</tbody></table>
+<p>Block排版算法主要有以下阶段：</p>
+<p>1.Create NGConstraintSpace 计算次节点的约束空间<br>2.Get Cached LayoutResult 是否已经有排版结果<br>3.CalculateInitialFragmentGeometry 计算Fragment几何信息<br>4.LayoutWithAlgorithm 根据不同的display类型调用不同的排版算法<br>5.Set Cached LayoutResult 设置排版结果<br>6.CopyFragmentDataToLayoutBox 设置排版信息到box</p>
+<h3 id="第一阶段：Create-NGConstraintSpace-计算约束空间"><a href="#第一阶段：Create-NGConstraintSpace-计算约束空间" class="headerlink" title="第一阶段：Create NGConstraintSpace 计算约束空间"></a>第一阶段：Create NGConstraintSpace 计算约束空间</h3><p>计算约束空间的触发函数：NGConstraintSpace::CreateFromLayoutObject 和 NGBlockLayoutAlgorithm::CreateConstraintSpaceForChild</p>
+<p>1.获取ContainingBlock计算可用的宽度<br>2.获取ContainingBlock计算可用的高度<br>3.通过 NGConstraintSpaceBuilder 生成NGConstraintSpace</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><div class="code-wrapper"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></div></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function">NGConstraintSpace <span class="hljs-title">NGConstraintSpace::CreateFromLayoutObject</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    <span class="hljs-type">const</span> LayoutBlock&amp; block)</span> </span>&#123;<br>  <span class="hljs-comment">// We should only ever create a constraint space from legacy layout if the</span><br>  <span class="hljs-comment">// object is a new formatting context.</span><br>  <span class="hljs-built_in">DCHECK</span>(block.<span class="hljs-built_in">CreatesNewFormattingContext</span>());<br> <br>  <span class="hljs-type">const</span> LayoutBlock* cb = block.<span class="hljs-built_in">ContainingBlock</span>();<br>  LayoutUnit available_logical_width =<br>      LayoutBoxUtils::<span class="hljs-built_in">AvailableLogicalWidth</span>(block, cb); <span class="hljs-comment">// 计算可用宽度</span><br>  LayoutUnit available_logical_height =<br>      LayoutBoxUtils::<span class="hljs-built_in">AvailableLogicalHeight</span>(block, cb); <span class="hljs-comment">// 计算可用高度</span><br>  LogicalSize percentage_size = &#123;available_logical_width,<br>                                 available_logical_height&#125;;<br>  LogicalSize available_size = percentage_size;<br> <br>......<br> <br>  <span class="hljs-type">const</span> ComputedStyle&amp; style = block.<span class="hljs-built_in">StyleRef</span>();<br>  <span class="hljs-keyword">auto</span> writing_mode = style.<span class="hljs-built_in">GetWritingMode</span>();<br>  <span class="hljs-type">bool</span> parallel_containing_block = <span class="hljs-built_in">IsParallelWritingMode</span>(<br>      cb ? cb-&gt;<span class="hljs-built_in">StyleRef</span>().<span class="hljs-built_in">GetWritingMode</span>() : writing_mode, writing_mode);<br>  <span class="hljs-function">NGConstraintSpaceBuilder <span class="hljs-title">builder</span><span class="hljs-params">(writing_mode, writing_mode,</span></span><br><span class="hljs-params"><span class="hljs-function">                                   <span class="hljs-comment">/* is_new_fc */</span> <span class="hljs-literal">true</span>,</span></span><br><span class="hljs-params"><span class="hljs-function">                                   !parallel_containing_block)</span></span>;<br>......<br> <br>  builder.<span class="hljs-built_in">SetAvailableSize</span>(available_size); <span class="hljs-comment">// 设置可用size</span><br>  builder.<span class="hljs-built_in">SetPercentageResolutionSize</span>(percentage_size);<br>  builder.<span class="hljs-built_in">SetIsFixedInlineSize</span>(fixed_inline);<br>  builder.<span class="hljs-built_in">SetIsFixedBlockSize</span>(fixed_block);<br>  builder.<span class="hljs-built_in">SetIsFixedBlockSizeIndefinite</span>(!fixed_block_is_definite);<br>  builder.<span class="hljs-built_in">SetIsShrinkToFit</span>(<br>      style.<span class="hljs-built_in">LogicalWidth</span>().<span class="hljs-built_in">IsAuto</span>() &amp;&amp;<br>      block.<span class="hljs-built_in">SizesLogicalWidthToFitContent</span>(style.<span class="hljs-built_in">LogicalWidth</span>()));<br>  builder.<span class="hljs-built_in">SetTextDirection</span>(style.<span class="hljs-built_in">Direction</span>());<br>  <span class="hljs-keyword">return</span> builder.<span class="hljs-built_in">ToConstraintSpace</span>(); <span class="hljs-comment">// 生成ConstraintSpace</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="第二阶段：Get-Cached-LayoutResult-是否已经有排版结果"><a href="#第二阶段：Get-Cached-LayoutResult-是否已经有排版结果" class="headerlink" title="第二阶段：Get Cached LayoutResult 是否已经有排版结果"></a>第二阶段：Get Cached LayoutResult 是否已经有排版结果</h3><p>通过CachedLayoutResult是否有排版结果，有结果则不需重新排版</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs C++">  NGLayoutCacheStatus cache_status;<br>  base::Optional&lt;NGFragmentGeometry&gt; fragment_geometry;<br>  scoped_refptr&lt;<span class="hljs-type">const</span> NGLayoutResult&gt; layout_result =<br>      box_-&gt;<span class="hljs-built_in">CachedLayoutResult</span>(constraint_space, break_token, early_break,<br>                               &amp;fragment_geometry, &amp;cache_status); <span class="hljs-comment">// 获取NGLayoutResult</span><br>  <span class="hljs-keyword">if</span> (cache_status == NGLayoutCacheStatus::kHit) &#123;  <span class="hljs-comment">// cache的状态判断</span><br>    <span class="hljs-built_in">DCHECK</span>(layout_result);<br> <br>......<br> <br>    <span class="hljs-keyword">if</span> (!box_-&gt;<span class="hljs-built_in">NeedsLayout</span>()) <span class="hljs-comment">// 是否需要排版，不需要则直接返回结果</span><br>      <span class="hljs-keyword">return</span> layout_result;<br>  &#125;<br></code></pre></td></tr></table></figure>
+<h3 id="第三阶段：CalculateInitialFragmentGeometry-计算Box的盒子信息"><a href="#第三阶段：CalculateInitialFragmentGeometry-计算Box的盒子信息" class="headerlink" title="第三阶段：CalculateInitialFragmentGeometry 计算Box的盒子信息"></a>第三阶段：CalculateInitialFragmentGeometry 计算Box的盒子信息</h3><p>根据style和NGConstraintSpace计算出默认的盒子模型信息（宽度，高度，内边距，外边距等），触发函数是CalculateInitialFragmentGeometry</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function">NGFragmentGeometry <span class="hljs-title">CalculateInitialFragmentGeometry</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    <span class="hljs-type">const</span> NGConstraintSpace&amp; constraint_space,</span></span><br><span class="hljs-params"><span class="hljs-function">    <span class="hljs-type">const</span> NGBlockNode&amp; node)</span> </span>&#123;<br>  <span class="hljs-type">const</span> ComputedStyle&amp; style = node.<span class="hljs-built_in">Style</span>();<br> <br>  NGBoxStrut border = <span class="hljs-built_in">ComputeBorders</span>(constraint_space, node); <span class="hljs-comment">// 计算边框</span><br>  NGBoxStrut padding = <span class="hljs-built_in">ComputePadding</span>(constraint_space, style); <span class="hljs-comment">// 计算内边距</span><br>  NGBoxStrut scrollbar = <span class="hljs-built_in">ComputeScrollbars</span>(constraint_space, node); <span class="hljs-comment">// 计算滚动条区域</span><br>  NGBoxStrut border_padding = border + padding;<br>  NGBoxStrut border_scrollbar_padding = border_padding + scrollbar;<br> <br>......<br> <br>  LayoutUnit default_block_size = <span class="hljs-built_in">CalculateDefaultBlockSize</span>(<br>      constraint_space, node, border_scrollbar_padding); <span class="hljs-comment">// 计算默认的高度（注意这里用block表示就是高度）</span><br>  LayoutUnit inline_size =<br>      <span class="hljs-built_in">ComputeInlineSizeForFragment</span>(constraint_space, node, border_padding); <span class="hljs-comment">// 计算宽度</span><br> <br>  <span class="hljs-function">LogicalSize <span class="hljs-title">border_box_size</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">      inline_size,</span></span><br><span class="hljs-params"><span class="hljs-function">      ComputeBlockSizeForFragment(constraint_space, style, border_padding,</span></span><br><span class="hljs-params"><span class="hljs-function">                                  default_block_size, inline_size))</span></span>;<br> <br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">UNLIKELY</span>(border_box_size.inline_size &lt;<br>                   border_scrollbar_padding.<span class="hljs-built_in">InlineSum</span>() &amp;&amp;<br>               scrollbar.<span class="hljs-built_in">InlineSum</span>() &amp;&amp; !constraint_space.<span class="hljs-built_in">IsAnonymous</span>())) &#123;<br>    <span class="hljs-built_in">ClampScrollbarToContentBox</span>(<br>        &amp;scrollbar, border_box_size.inline_size - border_padding.<span class="hljs-built_in">InlineSum</span>());<br>  &#125;<br> <br>  <span class="hljs-keyword">return</span> &#123;border_box_size, border, scrollbar, padding&#125;; <span class="hljs-comment">// 返回计算的结果</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="第四阶段：LayoutWithAlgorithm-根据不同的display类型调用不同的排版算法"><a href="#第四阶段：LayoutWithAlgorithm-根据不同的display类型调用不同的排版算法" class="headerlink" title="第四阶段：LayoutWithAlgorithm 根据不同的display类型调用不同的排版算法"></a>第四阶段：LayoutWithAlgorithm 根据不同的display类型调用不同的排版算法</h3><p>根据display样式生成不同的LayoutAlgorithm，这里也是NG排版的精髓，方便后续新的标准实现不一样的算法。下表格就是现有display对应创建不同的算法。</p>
+<table>
+<thead>
+<tr>
+<th align="center">Display</th>
+<th align="center">LayoutAlgorithm</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">Block</td>
+<td align="center">NGBlockLayoutAlgorithm</td>
+</tr>
+<tr>
+<td align="center">Fieldset</td>
+<td align="center">NGFieldsetLayoutAlgorithm</td>
+</tr>
+<tr>
+<td align="center">Flex</td>
+<td align="center">NGFlexLayoutAlgorithm</td>
+</tr>
+<tr>
+<td align="center">FlowThread</td>
+<td align="center">NGColumnLayoutAlgorithm NGPageLayoutAlgorithm</td>
+</tr>
+<tr>
+<td align="center">Grid</td>
+<td align="center">NGGridLayoutAlgorithm</td>
+</tr>
+<tr>
+<td align="center">Inline</td>
+<td align="center">NGInlineLayoutAlgorithm</td>
+</tr>
+<tr>
+<td align="center">MathML</td>
+<td align="center">比较复杂，不同的元素生成不同的LayoutAlgorithm</td>
+</tr>
+<tr>
+<td align="center">这个阶段会递归的调用子节点进行排版。可以看如下代码：</td>
+<td align="center"></td>
+</tr>
+</tbody></table>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-keyword">inline</span> scoped_refptr&lt;<span class="hljs-type">const</span> NGLayoutResult&gt; <span class="hljs-title">NGBlockLayoutAlgorithm::Layout</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    NGInlineChildLayoutContext* inline_child_layout_context)</span> </span>&#123;<br>......<br>  scoped_refptr&lt;<span class="hljs-type">const</span> NGInlineBreakToken&gt; previous_inline_break_token;<br> <br>  <span class="hljs-function">NGBlockChildIterator <span class="hljs-title">child_iterator</span><span class="hljs-params">(Node().FirstChild(), BreakToken())</span></span>;<br> <br>  <span class="hljs-comment">// If this layout is blocked by a display-lock, then we pretend this node has</span><br>  <span class="hljs-comment">// no children and that there are no break tokens. Due to this, we skip layout</span><br>  <span class="hljs-comment">// on these children.</span><br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">Node</span>().<span class="hljs-built_in">ChildLayoutBlockedByDisplayLock</span>())<br>    child_iterator = <span class="hljs-built_in">NGBlockChildIterator</span>(<span class="hljs-built_in">NGBlockNode</span>(<span class="hljs-literal">nullptr</span>), <span class="hljs-literal">nullptr</span>);<br> <br>  <span class="hljs-function">NGLayoutInputNode <span class="hljs-title">ruby_text_child</span><span class="hljs-params">(<span class="hljs-literal">nullptr</span>)</span></span>;<br>  <span class="hljs-keyword">for</span> (<span class="hljs-keyword">auto</span> entry = child_iterator.<span class="hljs-built_in">NextChild</span>();<br>       NGLayoutInputNode child = entry.node;<br>       entry = child_iterator.<span class="hljs-built_in">NextChild</span>(previous_inline_break_token.<span class="hljs-built_in">get</span>())) &#123;  <span class="hljs-comment">// 遍历子节点</span><br>    <span class="hljs-type">const</span> NGBreakToken* child_break_token = entry.token;<br>......<br>        status = <span class="hljs-built_in">HandleInflow</span>(<br>            child, child_break_token, &amp;previous_inflow_position,<br>            inline_child_layout_context, &amp;previous_inline_break_token); <span class="hljs-comment">// 处理子节点的排版，最终还是会调用到NGBlockNode.Layout</span><br>......<br>    &#125;<br>  &#125;<br> <br>......<br> <br>  <span class="hljs-keyword">return</span> <span class="hljs-built_in">FinishLayout</span>(&amp;previous_inflow_position, inline_child_layout_context);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="第五阶段：Set-Cached-LayoutResult-设置排版结果到LayoutBox上"><a href="#第五阶段：Set-Cached-LayoutResult-设置排版结果到LayoutBox上" class="headerlink" title="第五阶段：Set Cached LayoutResult 设置排版结果到LayoutBox上"></a>第五阶段：Set Cached LayoutResult 设置排版结果到LayoutBox上</h3><p>设置LayoutResult到LayoutBox</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">NGBlockNode::FinishLayout</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    LayoutBlockFlow* block_flow,</span></span><br><span class="hljs-params"><span class="hljs-function">    <span class="hljs-type">const</span> NGConstraintSpace&amp; constraint_space,</span></span><br><span class="hljs-params"><span class="hljs-function">    <span class="hljs-type">const</span> NGBlockBreakToken* break_token,</span></span><br><span class="hljs-params"><span class="hljs-function">    scoped_refptr&lt;<span class="hljs-type">const</span> NGLayoutResult&gt; layout_result)</span> <span class="hljs-type">const</span> </span>&#123;<br>......<br> <br>  <span class="hljs-type">const</span> <span class="hljs-keyword">auto</span>&amp; physical_fragment =<br>      <span class="hljs-built_in">To</span>&lt;NGPhysicalBoxFragment&gt;(layout_result-&gt;<span class="hljs-built_in">PhysicalFragment</span>());<br> <br>  <span class="hljs-keyword">if</span> (layout_result-&gt;<span class="hljs-built_in">IsSingleUse</span>())<br>    box_-&gt;<span class="hljs-built_in">AddLayoutResult</span>(layout_result, <span class="hljs-built_in">FragmentIndex</span>(break_token));<br>  <span class="hljs-keyword">else</span><br>    box_-&gt;<span class="hljs-built_in">SetCachedLayoutResult</span>(layout_result); <span class="hljs-comment">// 设置结果</span><br> <br>.....<br>  <span class="hljs-built_in">CopyFragmentDataToLayoutBox</span>(constraint_space, *layout_result, break_token); <span class="hljs-comment">// copy部分片段信息到LayoutBox</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="第六阶段：CopyFragmentDataToLayoutBox-设置排版信息到LayoutBox上"><a href="#第六阶段：CopyFragmentDataToLayoutBox-设置排版信息到LayoutBox上" class="headerlink" title="第六阶段：CopyFragmentDataToLayoutBox 设置排版信息到LayoutBox上"></a>第六阶段：CopyFragmentDataToLayoutBox 设置排版信息到LayoutBox上</h3><p>设置LayoutBox的信息：</p>
+<p>1.设置box的宽高<br>2.设置整个内容高度（减去-边框和内边距）<br>3.设置外边距离大小</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">NGBlockNode::CopyFragmentDataToLayoutBox</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    <span class="hljs-type">const</span> NGConstraintSpace&amp; constraint_space,</span></span><br><span class="hljs-params"><span class="hljs-function">    <span class="hljs-type">const</span> NGLayoutResult&amp; layout_result,</span></span><br><span class="hljs-params"><span class="hljs-function">    <span class="hljs-type">const</span> NGBlockBreakToken* previous_break_token)</span> <span class="hljs-type">const</span> </span>&#123;<br>  <span class="hljs-type">const</span> <span class="hljs-keyword">auto</span>&amp; physical_fragment =<br>      <span class="hljs-built_in">To</span>&lt;NGPhysicalBoxFragment&gt;(layout_result.<span class="hljs-built_in">PhysicalFragment</span>());<br> <br>  <span class="hljs-function">NGBoxFragment <span class="hljs-title">fragment</span><span class="hljs-params">(constraint_space.GetWritingMode(),</span></span><br><span class="hljs-params"><span class="hljs-function">                         constraint_space.Direction(), physical_fragment)</span></span>;<br>  LogicalSize fragment_logical_size = fragment.<span class="hljs-built_in">Size</span>();<br>  NGBoxStrut borders = fragment.<span class="hljs-built_in">Borders</span>(); <span class="hljs-comment">// 获取边框大小</span><br>  NGBoxStrut scrollbars = <span class="hljs-built_in">ComputeScrollbars</span>(constraint_space, *<span class="hljs-keyword">this</span>); <span class="hljs-comment">// 获取滚动区域大小</span><br>  NGBoxStrut padding = fragment.<span class="hljs-built_in">Padding</span>(); <span class="hljs-comment">// 获取内边距大小</span><br>  NGBoxStrut border_scrollbar_padding = borders + scrollbars + padding;<br>  <span class="hljs-type">bool</span> is_last_fragment = !physical_fragment.<span class="hljs-built_in">BreakToken</span>();<br> <br>......<br> <br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">LIKELY</span>(physical_fragment.<span class="hljs-built_in">IsFirstForNode</span>())) &#123;<br>    box_-&gt;<span class="hljs-built_in">SetSize</span>(<span class="hljs-built_in">LayoutSize</span>(physical_fragment.<span class="hljs-built_in">Size</span>().width,<br>                             physical_fragment.<span class="hljs-built_in">Size</span>().height)); <span class="hljs-comment">// 设置宽高，这样一个块的大小就已经确认了</span><br>......<br> <br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">LIKELY</span>(is_last_fragment &amp;&amp; !constraint_space.<span class="hljs-built_in">IsFixedBlockSize</span>())) &#123;<br>      box_-&gt;<span class="hljs-built_in">SetIntrinsicContentLogicalHeight</span>(<br>          layout_result.<span class="hljs-built_in">IntrinsicBlockSize</span>() -<br>          border_scrollbar_padding.<span class="hljs-built_in">BlockSum</span>());  <span class="hljs-comment">// 设置内容高度</span><br>    &#125;<br>  &#125; <span class="hljs-keyword">else</span> &#123;<br>......<br>    box_-&gt;<span class="hljs-built_in">SetLogicalHeight</span>(logical_height);<br>  &#125;<br> <br>......<br> <br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">UNLIKELY</span>(box_-&gt;<span class="hljs-built_in">IsTableCell</span>())) &#123;<br>    <span class="hljs-comment">// Table-cell margins compute to zero.</span><br>    box_-&gt;<span class="hljs-built_in">SetMargin</span>(<span class="hljs-built_in">NGPhysicalBoxStrut</span>());<br>  &#125; <span class="hljs-keyword">else</span> &#123;<br>    box_-&gt;<span class="hljs-built_in">SetMargin</span>(<span class="hljs-built_in">ComputePhysicalMargins</span>(constraint_space, <span class="hljs-built_in">Style</span>())); <span class="hljs-comment">// 设置外边距大小</span><br>  &#125;<br> <br>  <span class="hljs-keyword">auto</span>* block_flow = <span class="hljs-built_in">DynamicTo</span>&lt;LayoutBlockFlow&gt;(box_);<br>......<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>到此一个盒子模型的排版信息就计算出来了</p>
+<p>同步知乎：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/370632812">https://zhuanlan.zhihu.com/p/370632812</a></p>
+
+            </div>
+            <hr>
+            <div>
+              <div class="post-metas mb-3">
+                
+                  <div class="post-meta mr-3">
+                    <i class="iconfont icon-category"></i>
+                    
+                      <a class="hover-with-bg" href="/categories/Chromium/">Chromium</a>
+                    
+                  </div>
+                
+                
+                  <div class="post-meta">
+                    <i class="iconfont icon-tags"></i>
+                    
+                      <a class="hover-with-bg" href="/tags/NG/">NG</a>
+                    
+                      <a class="hover-with-bg" href="/tags/Layout/">Layout</a>
+                    
+                  </div>
+                
+              </div>
+              
+                <p class="note note-warning">
+                  
+                    本博客所有文章除特别声明外，均采用 <a target="_blank" href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh" rel="nofollow noopener noopener">CC BY-SA 4.0 协议</a> ，转载请注明出处！
+                  
+                </p>
+              
+              
+                <div class="post-prevnext">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/05/04/V8-StaNamedProperty%E5%AD%97%E8%8A%82%E7%A0%81%E5%A4%84%E7%90%86%E7%A8%8B%E5%BA%8F/">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">V8 StaNamedProperty字节码处理程序</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/05/04/NG-Inline-Layout/">
+                        <span class="hidden-mobile">NG Inline Layout</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+              <!-- Comments -->
+              <article class="comments" id="comments" lazyload>
+                
+                  
+                
+                
+
+              </article>
+            
+          </article>
+        </div>
+      </div>
+    </div>
+    
+      <div class="d-none d-lg-block col-lg-2 toc-container" id="toc-ctn">
+        <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+      </div>
+    
+  </div>
+</div>
+
+<!-- Custom -->
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v"
+                 for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+
+    
+  </main>
+
+  <footer class="text-center mt-5 py-3">
+  <div class="footer-content">
+     <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+  </div>
+  
+  <div class="statistics">
+    
+    
+
+    
+      
+        <!-- 不蒜子统计PV -->
+        <span id="busuanzi_container_site_pv" style="display: none">
+            总访问量 
+            <span id="busuanzi_value_site_pv"></span>
+             次
+          </span>
+      
+      
+        <!-- 不蒜子统计UV -->
+        <span id="busuanzi_container_site_uv" style="display: none">
+            总访客数 
+            <span id="busuanzi_value_site_uv"></span>
+             人
+          </span>
+      
+    
+  </div>
+
+
+  
+
+  
+</footer>
+
+
+  <!-- SCRIPTS -->
+  
+  <script  src="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" ></script>
+<script  src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+<!-- Plugins -->
+
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+  
+
+
+
+  
+    <script  src="https://cdn.jsdelivr.net/npm/tocbot@4/dist/tocbot.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/anchor-js@4/anchor.min.js" ></script>
+  
+  
+    <script defer src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js" ></script>
+  
+
+
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+  <script  src="https://cdn.jsdelivr.net/npm/typed.js@2/lib/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var title = document.getElementById('subtitle').title;
+      
+        typing(title);
+      
+    })(window, document);
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+<!-- 主题的启动项 保持在最底部 -->
+<script  src="/js/boot.js" ></script>
+
+
+</body>
+</html>

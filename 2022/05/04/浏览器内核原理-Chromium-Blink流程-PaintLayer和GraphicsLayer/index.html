@@ -1,0 +1,530 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/touxiang.jpg">
+  <link rel="icon" href="/img/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Laiyonggao">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="前言上一章讲到生成layout tree，这一章主要讲解后面生成paint layer流程。 PaintLayer介绍早期blink的命名不是PaintLayer，而是RenderLayer。一个PaintLayer对应一个LayoutBoxModelObject，不是每个LayoutBoxModelObject会创建PaintLayer，是有条件才会创建。 PaintLayer的创建StyleD">
+<meta property="og:type" content="article">
+<meta property="og:title" content="浏览器内核原理--Chromium Blink流程 PaintLayer和GraphicsLayer">
+<meta property="og:url" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink%E6%B5%81%E7%A8%8B-PaintLayer%E5%92%8CGraphicsLayer/index.html">
+<meta property="og:site_name" content="赖勇高">
+<meta property="og:description" content="前言上一章讲到生成layout tree，这一章主要讲解后面生成paint layer流程。 PaintLayer介绍早期blink的命名不是PaintLayer，而是RenderLayer。一个PaintLayer对应一个LayoutBoxModelObject，不是每个LayoutBoxModelObject会创建PaintLayer，是有条件才会创建。 PaintLayer的创建StyleD">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink%E6%B5%81%E7%A8%8B-PaintLayer%E5%92%8CGraphicsLayer/Layout-PaintLayer.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink%E6%B5%81%E7%A8%8B-PaintLayer%E5%92%8CGraphicsLayer/%E6%97%B6%E5%BA%8F%E5%9B%BE.jpg">
+<meta property="article:published_time" content="2022-05-04T06:11:29.000Z">
+<meta property="article:modified_time" content="2022-05-04T06:36:36.997Z">
+<meta property="article:author" content="Laiyonggao">
+<meta property="article:tag" content="PaintLayer">
+<meta property="article:tag" content="GraphicsLayer">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink%E6%B5%81%E7%A8%8B-PaintLayer%E5%92%8CGraphicsLayer/Layout-PaintLayer.jpg">
+  
+  
+  <title>浏览器内核原理--Chromium Blink流程 PaintLayer和GraphicsLayer - 赖勇高</title>
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css" />
+
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4/github-markdown.min.css" />
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hint.css@2/hint.min.css" />
+
+  
+    
+    
+      
+      <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@10/styles/github-gist.min.css" />
+    
+  
+
+  
+    <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css" />
+  
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_ba1fz6golrf.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+<!-- 自定义样式保持在最底部 -->
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.8.14","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"right","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"copy_btn":true,"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  <header style="height: 70vh;">
+    <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>赖勇高</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div class="banner" id="banner" parallax=true
+         style="background: url('/img/default.png') no-repeat center center;
+           background-size: cover;">
+      <div class="full-bg-img">
+        <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+          <div class="page-header text-center fade-in-up">
+            <span class="h2" id="subtitle" title="浏览器内核原理--Chromium Blink流程 PaintLayer和GraphicsLayer">
+              
+            </span>
+
+            
+              <div class="mt-3">
+  
+  
+    <span class="post-meta">
+      <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+      <time datetime="2022-05-04 14:11" pubdate>
+        2022年5月4日 下午
+      </time>
+    </span>
+  
+</div>
+
+<div class="mt-1">
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-chart"></i>
+      14k 字
+    </span>
+  
+
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-clock-fill"></i>
+      
+      
+      121 分钟
+    </span>
+  
+
+  
+  
+</div>
+
+            
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="d-none d-lg-block col-lg-2"></div>
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div class="py-5" id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">浏览器内核原理--Chromium Blink流程 PaintLayer和GraphicsLayer</h1>
+            
+            <div class="markdown-body">
+              <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>上一章讲到生成layout tree，这一章主要讲解后面生成paint layer流程。</p>
+<h2 id="PaintLayer介绍"><a href="#PaintLayer介绍" class="headerlink" title="PaintLayer介绍"></a>PaintLayer介绍</h2><p>早期blink的命名不是PaintLayer，而是RenderLayer。一个PaintLayer对应一个LayoutBoxModelObject，不是每个LayoutBoxModelObject会创建PaintLayer，是有条件才会创建。<br><img src="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink%E6%B5%81%E7%A8%8B-PaintLayer%E5%92%8CGraphicsLayer/Layout-PaintLayer.jpg" srcset="/img/loading.gif" lazyload alt="Layout Tree到PaintLayer Tree"></p>
+<h3 id="PaintLayer的创建"><a href="#PaintLayer的创建" class="headerlink" title="PaintLayer的创建"></a>PaintLayer的创建</h3><p>StyleDidChange（样式变更）-&gt;LayerTypeRequired（根据当前元素样式是否获取layer类型，用于判断是否创建PaintLayer）-&gt;CreateLayerAfterStyleChange（创建PaintLayer）</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><div class="code-wrapper"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></div></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">LayoutBoxModelObject::StyleDidChange</span><span class="hljs-params">(StyleDifference diff,</span></span><br><span class="hljs-params"><span class="hljs-function">                                          <span class="hljs-type">const</span> ComputedStyle* old_style)</span> </span>&#123;<br>*****************************************************************************<br>******************************此处代码省略*************************************<br>*****************************************************************************<br>  PaintLayerType type = <span class="hljs-built_in">LayerTypeRequired</span>();<span class="hljs-comment">// 获取样式的Layer类型，判断是否需要创建Layer</span><br>  <span class="hljs-keyword">if</span> (type != kNoPaintLayer) &#123;<br>    <span class="hljs-keyword">if</span> (!<span class="hljs-built_in">Layer</span>()) &#123;<br>      <span class="hljs-comment">// In order to update this object properly, we need to lay it out again.</span><br>      <span class="hljs-comment">// However, if we have never laid it out, don&#x27;t mark it for layout. If</span><br>      <span class="hljs-comment">// this is a new object, it may not yet have been inserted into the tree,</span><br>      <span class="hljs-comment">// and if we mark it for layout then, we risk upsetting the tree</span><br>      <span class="hljs-comment">// insertion machinery.</span><br>      <span class="hljs-keyword">if</span> (<span class="hljs-built_in">EverHadLayout</span>())<br>        <span class="hljs-built_in">SetChildNeedsLayout</span>();<br><br>      <span class="hljs-built_in">CreateLayerAfterStyleChange</span>();<span class="hljs-comment">// 创建PainterLayer函数</span><br>    &#125;<br>  &#125; <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (<span class="hljs-built_in">Layer</span>() &amp;&amp; <span class="hljs-built_in">Layer</span>()-&gt;<span class="hljs-built_in">Parent</span>()) &#123;<br>    PaintLayer* parent_layer = <span class="hljs-built_in">Layer</span>()-&gt;<span class="hljs-built_in">Parent</span>();<br>    <span class="hljs-comment">// Either a transform wasn&#x27;t specified or the object doesn&#x27;t support</span><br>    <span class="hljs-comment">// transforms, so just null out the bit.</span><br>    <span class="hljs-built_in">SetHasTransformRelatedProperty</span>(<span class="hljs-literal">false</span>);<br>    <span class="hljs-built_in">SetHasReflection</span>(<span class="hljs-literal">false</span>);<br>    <span class="hljs-built_in">Layer</span>()-&gt;<span class="hljs-built_in">UpdateFilters</span>(old_style, <span class="hljs-built_in">StyleRef</span>());<br>    <span class="hljs-built_in">Layer</span>()-&gt;<span class="hljs-built_in">UpdateClipPath</span>(old_style, <span class="hljs-built_in">StyleRef</span>());<br>    <span class="hljs-comment">// Calls DestroyLayer() which clears the layer.</span><br>    <span class="hljs-built_in">Layer</span>()-&gt;<span class="hljs-built_in">RemoveOnlyThisLayerAfterStyleChange</span>();<br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">EverHadLayout</span>())<br>      <span class="hljs-built_in">SetChildNeedsLayout</span>();<br>    <span class="hljs-keyword">if</span> (had_transform_related_property) &#123;<br>      <span class="hljs-built_in">SetNeedsLayoutAndPrefWidthsRecalcAndFullPaintInvalidation</span>(<br>          LayoutInvalidationReason::kStyleChange);<br>    &#125;<br>    <span class="hljs-keyword">if</span> (!<span class="hljs-built_in">NeedsLayout</span>()) &#123;<br>      <span class="hljs-comment">// <span class="hljs-doctag">FIXME:</span> We should call a specialized version of this function.</span><br>      parent_layer-&gt;<span class="hljs-built_in">UpdateLayerPositionsAfterLayout</span>();<br>    &#125;<br>  &#125;<br>*****************************************************************************<br>******************************此处代码省略*************************************<br>*****************************************************************************<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="创建PaintLayer的条件"><a href="#创建PaintLayer的条件" class="headerlink" title="创建PaintLayer的条件"></a>创建PaintLayer的条件</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-number">1.</span>It<span class="hljs-number">&#x27;</span>s the root object <span class="hljs-keyword">for</span> the page<br><span class="hljs-number">2.</span><span class="hljs-function">It has <span class="hljs-keyword">explicit</span> CSS position <span class="hljs-title">properties</span> <span class="hljs-params">(relative, absolute <span class="hljs-keyword">or</span> a transform)</span></span><br><span class="hljs-function">3.It is transparent</span><br><span class="hljs-function">4.Has overflow, an alpha mask <span class="hljs-keyword">or</span> reflection</span><br><span class="hljs-function">5.Has a CSS filter</span><br><span class="hljs-function">6.Corresponds to &lt;canvas&gt; element that has a 3<span class="hljs-title">D</span> <span class="hljs-params">(WebGL)</span> context <span class="hljs-keyword">or</span> an accelerated 2D context</span><br><span class="hljs-function">7.Corresponds to a &lt;video&gt; element</span><br></code></pre></td></tr></table></figure>
+<p>函数实现：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function">PaintLayerType <span class="hljs-title">LayoutBox::LayerTypeRequired</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>&#123;<br>  <span class="hljs-comment">// hasAutoZIndex only returns true if the element is positioned or a flex-item</span><br>  <span class="hljs-comment">// since position:static elements that are not flex-items get their z-index</span><br>  <span class="hljs-comment">// coerced to auto.</span><br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">IsPositioned</span>() || <span class="hljs-built_in">CreatesGroup</span>() || <span class="hljs-built_in">HasClipPath</span>() ||<br>      <span class="hljs-built_in">HasTransformRelatedProperty</span>() || <span class="hljs-built_in">HasHiddenBackface</span>() || <span class="hljs-built_in">HasReflection</span>() ||<br>      <span class="hljs-built_in">Style</span>()-&gt;<span class="hljs-built_in">SpecifiesColumns</span>() || <span class="hljs-built_in">Style</span>()-&gt;<span class="hljs-built_in">IsStackingContext</span>() ||<br>      <span class="hljs-built_in">Style</span>()-&gt;<span class="hljs-built_in">ShouldCompositeForCurrentAnimations</span>() ||<br>      RootScrollerUtil::<span class="hljs-built_in">IsEffective</span>(*<span class="hljs-keyword">this</span>))<br>    <span class="hljs-keyword">return</span> kNormalPaintLayer;<br><br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">HasOverflowClip</span>())<br>    <span class="hljs-keyword">return</span> kOverflowClipPaintLayer;<br><br>  <span class="hljs-keyword">return</span> kNoPaintLayer;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="PaintLayer-Tree到GraphicsLayer-Tree创建流程"><a href="#PaintLayer-Tree到GraphicsLayer-Tree创建流程" class="headerlink" title="PaintLayer Tree到GraphicsLayer Tree创建流程"></a>PaintLayer Tree到GraphicsLayer Tree创建流程</h3><p>![PaintLayer Tree到GraphocsLayer Tree创建流程](PaintLayer -GraphocsLayer创建流程.jpg)<br>以下是函数流程：<br>PaintLayerCompositor::UpdateIfNeededRecursiveInternal（递归调用所有LocalFrame进行更新PaintLayerCompositor）-&gt;PaintLayerCompositor::UpdateIfNeeded-&gt;CompositingLayerAssigner::Assign（CompositingLayerMapping创建或者删除）-&gt;GraphicsLayerUpdater::Update（GraphicsLayer属性更新）-&gt;GraphicsLayerTreeBuilder::Rebuild（重新创建GraphicsLayer Tree）<br><img src="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink%E6%B5%81%E7%A8%8B-PaintLayer%E5%92%8CGraphicsLayer/%E6%97%B6%E5%BA%8F%E5%9B%BE.jpg" srcset="/img/loading.gif" lazyload alt="时序图"><br>入口函数PaintLayerCompositor::UpdateIfNeeded函数主要做以下事情：<br>1.构建CompositingLayerMapping<br>2.GraphicsLayerUpdater更新GraphicsLayer属性（例如更新GraphicsLayer Transform，Opacity，Filters，位置等）<br>3.根据GraphicsLayerUpdater.NeedsRebuildTree()是否需要重新创建GraphicsLayer Tree<br>4.设置RootGraphicsLayer</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">PaintLayerCompositor::UpdateIfNeeded</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    DocumentLifecycle::LifecycleState target_state,</span></span><br><span class="hljs-params"><span class="hljs-function">    CompositingReasonsStats&amp; compositing_reasons_stats)</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(target_state &gt;= DocumentLifecycle::kCompositingInputsClean);<br><br>  <span class="hljs-built_in">Lifecycle</span>().<span class="hljs-built_in">AdvanceTo</span>(DocumentLifecycle::kInCompositingUpdate); <span class="hljs-comment">//更新document的生命周期</span><br><br>*****************************************************************************<br>******************************此处代码省略************************************<br>*****************************************************************************<br><br>  CompositingUpdateType update_type = pending_update_type_;<br>  pending_update_type_ = kCompositingUpdateNone;<br><br>  <span class="hljs-keyword">if</span> (!<span class="hljs-built_in">HasAcceleratedCompositing</span>()) &#123; <span class="hljs-comment">// 如果未开启硬件合成则返回</span><br>    <span class="hljs-built_in">UpdateWithoutAcceleratedCompositing</span>(update_type);<br>    <span class="hljs-built_in">Lifecycle</span>().<span class="hljs-built_in">AdvanceTo</span>(<br>        std::<span class="hljs-built_in">min</span>(DocumentLifecycle::kCompositingClean, target_state));<br>    <span class="hljs-keyword">return</span>;<br>  &#125;<br><br>*****************************************************************************<br>******************************此处代码省略************************************<br>*****************************************************************************<br>  PaintLayer* update_root = <span class="hljs-built_in">RootLayer</span>(); <span class="hljs-comment">// 获取root layer</span><br><br>  Vector&lt;PaintLayer*&gt; layers_needing_paint_invalidation;<br><br>  <span class="hljs-keyword">if</span> (update_type &gt;= kCompositingUpdateAfterCompositingInputChange) &#123;<br>    <span class="hljs-built_in">CompositingInputsUpdater</span>(update_root).<span class="hljs-built_in">Update</span>();<br><br>*****************************************************************************<br>******************************此处代码省略************************************<br>*****************************************************************************<br><br>    <span class="hljs-built_in">CompositingRequirementsUpdater</span>(layout_view_, compositing_reason_finder_)<br>        .<span class="hljs-built_in">Update</span>(update_root, compositing_reasons_stats);<br><br>    <span class="hljs-function">CompositingLayerAssigner <span class="hljs-title">layer_assigner</span><span class="hljs-params">(<span class="hljs-keyword">this</span>)</span></span>;<br>    layer_assigner.<span class="hljs-built_in">Assign</span>(update_root, layers_needing_paint_invalidation); <span class="hljs-comment">// 创建CompositingLayer</span><br><br>    <span class="hljs-type">bool</span> layers_changed = layer_assigner.<span class="hljs-built_in">LayersChanged</span>();<br><br>*****************************************************************************<br>******************************此处代码省略************************************<br>*****************************************************************************<br><br>  GraphicsLayerUpdater updater;<br>  updater.<span class="hljs-built_in">Update</span>(*update_root, layers_needing_paint_invalidation); <span class="hljs-comment">// 更新GraphicsLayer</span><br><br>  <span class="hljs-keyword">if</span> (updater.<span class="hljs-built_in">NeedsRebuildTree</span>())<br>    update_type = std::<span class="hljs-built_in">max</span>(update_type, kCompositingUpdateRebuildTree);<br><br>  <span class="hljs-keyword">if</span> (update_type &gt;= kCompositingUpdateRebuildTree) &#123;<br>    GraphicsLayerVector child_list;<br>    &#123;<br>      <span class="hljs-built_in">TRACE_EVENT0</span>(<span class="hljs-string">&quot;blink&quot;</span>, <span class="hljs-string">&quot;GraphicsLayerTreeBuilder::rebuild&quot;</span>);<br>      <span class="hljs-built_in">GraphicsLayerTreeBuilder</span>().<span class="hljs-built_in">Rebuild</span>(*update_root, child_list);<br>    &#125;<br><br>*****************************************************************************<br>******************************此处代码省略************************************<br>*****************************************************************************<br><br>  <span class="hljs-keyword">if</span> (root_layer_attachment_ == kRootLayerPendingAttachViaChromeClient) &#123;<br>    <span class="hljs-keyword">if</span> (Page* page = layout_view_.<span class="hljs-built_in">GetFrame</span>()-&gt;<span class="hljs-built_in">GetPage</span>()) &#123;<br>      page-&gt;<span class="hljs-built_in">GetChromeClient</span>().<span class="hljs-built_in">AttachRootGraphicsLayer</span>(<span class="hljs-built_in">RootGraphicsLayer</span>(),<br>                                                      layout_view_.<span class="hljs-built_in">GetFrame</span>()); <span class="hljs-comment">// 设置RootGraphicsLayer</span><br>      root_layer_attachment_ = kRootLayerAttachedViaChromeClient;<br>    &#125;<br>  &#125;<br><br>*****************************************************************************<br>******************************此处代码省略************************************<br>*****************************************************************************<br><br>  <span class="hljs-built_in">Lifecycle</span>().<span class="hljs-built_in">AdvanceTo</span>(DocumentLifecycle::kCompositingClean);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="PaintLayerCompositor"><a href="#PaintLayerCompositor" class="headerlink" title="PaintLayerCompositor"></a>PaintLayerCompositor</h2><p>创建PaintLayerCompositor</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function">PaintLayerCompositor* <span class="hljs-title">LayoutView::Compositor</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-keyword">if</span> (!compositor_)<br>    compositor_ = WTF::<span class="hljs-built_in">WrapUnique</span>(<span class="hljs-keyword">new</span> <span class="hljs-built_in">PaintLayerCompositor</span>(*<span class="hljs-keyword">this</span>));<br><br>  <span class="hljs-keyword">return</span> compositor_.<span class="hljs-built_in">get</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>由上可以看出来一个LayoutView对应一个PaintLayerCompositor</p>
+<h2 id="CompositedLayerMapping"><a href="#CompositedLayerMapping" class="headerlink" title="CompositedLayerMapping"></a>CompositedLayerMapping</h2><p>函数调用流程：<br>CompositingLayerAssigner::Assign-&gt;CompositingLayerAssigner::AssignLayersToBackingsInternal-&gt;PaintLayerCompositor::AllocateOrClearCompositedLayerMapping（分配获取清除CompositedLayerMapping）-&gt;PaintLayer::EnsureCompositedLayerMapping（创建CompositedLayerMapping）<br>!(时序图)[时序图-1.jpg]<br>PaintLayerCompositor::AllocateOrClearCompositedLayerMapping创建或者清除CompositedLayerMapping，具体作用：<br>1.如果当前的composited_layer_update为kAllocateOwnCompositedLayerMapping则需要为PaintLayer创建个CompositedLayerMapping<br>2.如果当前的composited_layer_update为kRemoveOwnCompositedLayerMapping和kPutInSquashingLayer则清除PaintLayer的CompositedLayerMapping</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">PaintLayerCompositor::AllocateOrClearCompositedLayerMapping</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    PaintLayer* layer,</span></span><br><span class="hljs-params"><span class="hljs-function">    <span class="hljs-type">const</span> CompositingStateTransitionType composited_layer_update)</span> </span>&#123;<br>  <span class="hljs-type">bool</span> composited_layer_mapping_changed = <span class="hljs-literal">false</span>;<br><br>  <span class="hljs-comment">// <span class="hljs-doctag">FIXME:</span> It would be nice to directly use the layer&#x27;s compositing reason,</span><br>  <span class="hljs-comment">// but allocateOrClearCompositedLayerMapping also gets called without having</span><br>  <span class="hljs-comment">// updated compositing requirements fully.</span><br>  <span class="hljs-keyword">switch</span> (composited_layer_update) &#123;<br>    <span class="hljs-keyword">case</span> kAllocateOwnCompositedLayerMapping: <span class="hljs-comment">// kAllocateOwnCompositedLayerMapping需要分配自己的后端合成</span><br>      <span class="hljs-built_in">DCHECK</span>(!layer-&gt;<span class="hljs-built_in">HasCompositedLayerMapping</span>());<br>      <span class="hljs-built_in">SetCompositingModeEnabled</span>(<span class="hljs-literal">true</span>);<br><br>      <span class="hljs-comment">// If we need to issue paint invalidations, do so before allocating the</span><br>      <span class="hljs-comment">// compositedLayerMapping and clearing out the groupedMapping.</span><br>      <span class="hljs-built_in">PaintInvalidationOnCompositingChange</span>(layer);<br><br>      <span class="hljs-comment">// If this layer was previously squashed, we need to remove its reference</span><br>      <span class="hljs-comment">// to a groupedMapping right away, so that computing paint invalidation</span><br>      <span class="hljs-comment">// rects will know the layer&#x27;s correct compositingState.</span><br>      <span class="hljs-comment">// <span class="hljs-doctag">FIXME:</span> do we need to also remove the layer from it&#x27;s location in the</span><br>      <span class="hljs-comment">// squashing list of its groupedMapping?  Need to create a test where a</span><br>      <span class="hljs-comment">// squashed layer pops into compositing. And also to cover all other sorts</span><br>      <span class="hljs-comment">// of compositingState transitions.</span><br>      layer-&gt;<span class="hljs-built_in">SetLostGroupedMapping</span>(<span class="hljs-literal">false</span>);<br>      layer-&gt;<span class="hljs-built_in">SetGroupedMapping</span>(<br>          <span class="hljs-literal">nullptr</span>, PaintLayer::kInvalidateLayerAndRemoveFromMapping);<br><br>      layer-&gt;<span class="hljs-built_in">EnsureCompositedLayerMapping</span>(); <span class="hljs-comment">// 创建CompositedLayerMapping</span><br>      composited_layer_mapping_changed = <span class="hljs-literal">true</span>;<br><br>      <span class="hljs-built_in">RestartAnimationOnCompositor</span>(layer-&gt;<span class="hljs-built_in">GetLayoutObject</span>());<br><br>      <span class="hljs-comment">// At this time, the ScrollingCoordinator only supports the top-level</span><br>      <span class="hljs-comment">// frame.</span><br>      <span class="hljs-keyword">if</span> (layer-&gt;<span class="hljs-built_in">IsRootLayer</span>() &amp;&amp; layout_view_.<span class="hljs-built_in">GetFrame</span>()-&gt;<span class="hljs-built_in">IsLocalRoot</span>()) &#123;<br>        <span class="hljs-keyword">if</span> (ScrollingCoordinator* scrolling_coordinator =<br>                <span class="hljs-keyword">this</span>-&gt;<span class="hljs-built_in">GetScrollingCoordinator</span>()) &#123;<br>          scrolling_coordinator-&gt;<span class="hljs-built_in">FrameViewRootLayerDidChange</span>(<br>              layout_view_.<span class="hljs-built_in">GetFrameView</span>());<br>        &#125;<br>      &#125;<br>      <span class="hljs-keyword">break</span>;<br>    <span class="hljs-keyword">case</span> kRemoveOwnCompositedLayerMapping:<br>    <span class="hljs-comment">// PutInSquashingLayer means you might have to remove the composited layer</span><br>    <span class="hljs-comment">// mapping first.</span><br>    <span class="hljs-keyword">case</span> kPutInSquashingLayer:<br>      <span class="hljs-keyword">if</span> (layer-&gt;<span class="hljs-built_in">HasCompositedLayerMapping</span>()) &#123;<br>        layer-&gt;<span class="hljs-built_in">ClearCompositedLayerMapping</span>(); <span class="hljs-comment">// 清除PaintLayer的CompositedLayerMapping</span><br>        composited_layer_mapping_changed = <span class="hljs-literal">true</span>;<br>      &#125;<br><br>      <span class="hljs-keyword">break</span>;<br>    <span class="hljs-keyword">case</span> kRemoveFromSquashingLayer:<br>    <span class="hljs-keyword">case</span> kNoCompositingStateChange:<br>      <span class="hljs-comment">// Do nothing.</span><br>      <span class="hljs-keyword">break</span>;<br>  &#125;<br>*****************************************************************************<br>******************************此处代码省略************************************<br>*****************************************************************************<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>NeedsOwnBacking函数介绍：</p>
+<p>调用NeedsOwnBacking函数可以判断出否需要为PaintLayer创建一个CompositedLayerMapping，PaintLayer创建CompositedLayerMapping是会给出CompositingReason的，CompositingReason的定义可以查看CompositingReasons.h文件代码有点多就不贴出来了。PaintLayer必须满足一下条件才能创建CompositedLayerMapping</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-number">1.L</span>ayer has <span class="hljs-number">3</span>D <span class="hljs-keyword">or</span> perspective transform CSS properties   <br><span class="hljs-number">2.L</span>ayer is used by &lt;video&gt; element <span class="hljs-keyword">using</span> accelerated video decoding  <br><span class="hljs-number">3.L</span>ayer is used by a &lt;canvas&gt; element with a <span class="hljs-number">3</span>D context <span class="hljs-keyword">or</span> accelerated <span class="hljs-number">2</span>D context<br><span class="hljs-number">4.L</span>ayer is used <span class="hljs-keyword">for</span> a composited plugin<br><span class="hljs-number">5.L</span>ayer uses a CSS animation <span class="hljs-keyword">for</span> its opacity <span class="hljs-keyword">or</span> uses an animated webkit transform<br><span class="hljs-number">6.L</span>ayer uses accelerated CSS filters <br><span class="hljs-number">7.L</span>ayer has a descendant that is a compositing layer  <br><span class="hljs-number">8.L</span>ayer has a sibling with a lower z-<span class="hljs-function">index which has a compositing <span class="hljs-title">layer</span> <span class="hljs-params">(in other words the layer overlaps a composited layer <span class="hljs-keyword">and</span> should be rendered on top of it)</span></span><br></code></pre></td></tr></table></figure>
+<p>判断是否需要创建后端的函数实现：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">CompositingLayerAssigner::NeedsOwnBacking</span><span class="hljs-params">(<span class="hljs-type">const</span> PaintLayer* layer)</span> <span class="hljs-type">const</span> </span>&#123;<br>  <span class="hljs-keyword">if</span> (!compositor_-&gt;<span class="hljs-built_in">CanBeComposited</span>(layer))<br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br><br>  <span class="hljs-keyword">return</span> <span class="hljs-built_in">RequiresCompositing</span>(layer-&gt;<span class="hljs-built_in">GetCompositingReasons</span>()) ||<br>         (compositor_-&gt;<span class="hljs-built_in">StaleInCompositingMode</span>() &amp;&amp; layer-&gt;<span class="hljs-built_in">IsRootLayer</span>());<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>从上面可以知道主要的实现函数是RequiresCompositing，当RequiresCompositing返回为true则表示需要创建。<br>CompositedLayerMapping创建函数</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">PaintLayer::EnsureCompositedLayerMapping</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-keyword">if</span> (rare_data_ &amp;&amp; rare_data_-&gt;composited_layer_mapping)<br>    <span class="hljs-keyword">return</span>;<br><br>  <span class="hljs-built_in">EnsureRareData</span>().composited_layer_mapping =<br>      WTF::<span class="hljs-built_in">WrapUnique</span>(<span class="hljs-keyword">new</span> <span class="hljs-built_in">CompositedLayerMapping</span>(*<span class="hljs-keyword">this</span>)); <span class="hljs-comment">//创建CompositedLayerMapping</span><br>  rare_data_-&gt;composited_layer_mapping-&gt;<span class="hljs-built_in">SetNeedsGraphicsLayerUpdate</span>(<br>      kGraphicsLayerUpdateSubtree);<br><br>  <span class="hljs-keyword">if</span> (PaintLayerResourceInfo* resource_info = <span class="hljs-keyword">this</span>-&gt;<span class="hljs-built_in">ResourceInfo</span>())<br>    resource_info-&gt;<span class="hljs-built_in">InvalidateFilterChain</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="GraphicsLayer"><a href="#GraphicsLayer" class="headerlink" title="GraphicsLayer"></a>GraphicsLayer</h2><p>每个GraphicsLayer都有一个GraphicsContext，用于绘制相关的PaintLayers<br>由上可知一个PaintLayer可能会生成一个CompositedLayerMapping，CompositedLayerMapping与GraphicsLayer是一对多的关系，一个CompositedLayerMapping一定会有会生成content layer, 可能会有背景Layer，滚动条Layer，前景Layer（可以查看CompositedLayerMapping的成员变量）。CompositedLayerMapping下的GraphicsLayer关系</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-comment">//  + m_ancestorClippingLayer [OPTIONAL]</span><br><span class="hljs-comment">//    + m_graphicsLayer</span><br><span class="hljs-comment">//      + m_childTransformLayer [OPTIONAL]</span><br><span class="hljs-comment">//      | + m_childContainmentLayer [OPTIONAL]</span><br><span class="hljs-comment">//      |   &lt;-OR-&gt;</span><br><span class="hljs-comment">//      |   (m_scrollingLayer + m_scrollingContentsLayer) [OPTIONAL]</span><br><span class="hljs-comment">//      + m_overflowControlsAncestorClippingLayer [OPTIONAL]</span><br><span class="hljs-comment">//      | + m_overflowControlsHostLayer [OPTIONAL]</span><br><span class="hljs-comment">//      |   + m_layerForVerticalScrollbar [OPTIONAL]</span><br><span class="hljs-comment">//      |   + m_layerForHorizontalScrollbar [OPTIONAL]</span><br><span class="hljs-comment">//      |   + m_layerForScrollCorner [OPTIONAL]</span><br><span class="hljs-comment">//      + m_decorationOutlineLayer [OPTIONAL]</span><br></code></pre></td></tr></table></figure>
+<p>当创建CompositedLayerMapping就会创建网页内容的graphics_layer_ 。<br>CompositedLayerMapping-&gt;CompositedLayerMapping::CreatePrimaryGraphicsLayer-&gt;CompositedLayerMapping::CreateGraphicsLayer</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs C++">CompositedLayerMapping::<span class="hljs-built_in">CompositedLayerMapping</span>(PaintLayer&amp; layer)<br>    : <span class="hljs-built_in">owning_layer_</span>(layer),<br>      <span class="hljs-built_in">content_offset_in_compositing_layer_dirty_</span>(<span class="hljs-literal">false</span>),<br>      <span class="hljs-built_in">pending_update_scope_</span>(kGraphicsLayerUpdateNone),<br>      <span class="hljs-built_in">is_main_frame_layout_view_layer_</span>(<span class="hljs-literal">false</span>),<br>      <span class="hljs-built_in">background_layer_paints_fixed_root_background_</span>(<span class="hljs-literal">false</span>),<br>      <span class="hljs-built_in">scrolling_contents_are_empty_</span>(<span class="hljs-literal">false</span>),<br>      <span class="hljs-built_in">background_paints_onto_scrolling_contents_layer_</span>(<span class="hljs-literal">false</span>),<br>      <span class="hljs-built_in">background_paints_onto_graphics_layer_</span>(<span class="hljs-literal">false</span>),<br>      <span class="hljs-built_in">draws_background_onto_content_layer_</span>(<span class="hljs-literal">false</span>) &#123;<br>  <span class="hljs-keyword">if</span> (layer.<span class="hljs-built_in">IsRootLayer</span>() &amp;&amp; <span class="hljs-built_in">GetLayoutObject</span>().<span class="hljs-built_in">GetFrame</span>()-&gt;<span class="hljs-built_in">IsMainFrame</span>())<br>    is_main_frame_layout_view_layer_ = <span class="hljs-literal">true</span>;<br><br>  <span class="hljs-built_in">CreatePrimaryGraphicsLayer</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>下面是设置CompositedLayerMapping的内容绘制的graphics_layer_</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">CompositedLayerMapping::CreatePrimaryGraphicsLayer</span><span class="hljs-params">()</span> </span>&#123;<br>  graphics_layer_ =<br>      <span class="hljs-built_in">CreateGraphicsLayer</span>(owning_layer_.<span class="hljs-built_in">GetCompositingReasons</span>(),<br>                          owning_layer_.<span class="hljs-built_in">GetSquashingDisallowedReasons</span>()); <span class="hljs-comment">// 创建graphics_layer_ </span><br><br>  <span class="hljs-built_in">UpdateShouldHitTest</span>(<span class="hljs-literal">true</span>);<br>  <span class="hljs-built_in">UpdateOpacity</span>(<span class="hljs-built_in">GetLayoutObject</span>().<span class="hljs-built_in">StyleRef</span>());<br>  <span class="hljs-built_in">UpdateTransform</span>(<span class="hljs-built_in">GetLayoutObject</span>().<span class="hljs-built_in">StyleRef</span>());<br>  <span class="hljs-built_in">UpdateFilters</span>(<span class="hljs-built_in">GetLayoutObject</span>().<span class="hljs-built_in">StyleRef</span>());<br>  <span class="hljs-built_in">UpdateBackdropFilters</span>(<span class="hljs-built_in">GetLayoutObject</span>().<span class="hljs-built_in">StyleRef</span>());<br>  <span class="hljs-built_in">UpdateLayerBlendMode</span>(<span class="hljs-built_in">GetLayoutObject</span>().<span class="hljs-built_in">StyleRef</span>());<br>  <span class="hljs-built_in">UpdateIsRootForIsolatedGroup</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>优化思路<br>一个复杂的网页生成很多Layer，前端要尽量控制Layer数，因为到cc层，Layer计算和光栅化是耗时的，每个Picture Layer都会计算自己的的tile</p>
+<p>同步知乎：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/48515392">https://zhuanlan.zhihu.com/p/48515392</a></p>
+
+            </div>
+            <hr>
+            <div>
+              <div class="post-metas mb-3">
+                
+                  <div class="post-meta mr-3">
+                    <i class="iconfont icon-category"></i>
+                    
+                      <a class="hover-with-bg" href="/categories/Chromium/">Chromium</a>
+                    
+                  </div>
+                
+                
+                  <div class="post-meta">
+                    <i class="iconfont icon-tags"></i>
+                    
+                      <a class="hover-with-bg" href="/tags/PaintLayer/">PaintLayer</a>
+                    
+                      <a class="hover-with-bg" href="/tags/GraphicsLayer/">GraphicsLayer</a>
+                    
+                  </div>
+                
+              </div>
+              
+                <p class="note note-warning">
+                  
+                    本博客所有文章除特别声明外，均采用 <a target="_blank" href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh" rel="nofollow noopener noopener">CC BY-SA 4.0 协议</a> ，转载请注明出处！
+                  
+                </p>
+              
+              
+                <div class="post-prevnext">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90/">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">浏览器内核原理--Chromium Blink Html解析</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink%E6%B5%81%E7%A8%8B%EF%BC%881%EF%BC%89/">
+                        <span class="hidden-mobile">浏览器内核原理--Chromium Blink流程（1）</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+              <!-- Comments -->
+              <article class="comments" id="comments" lazyload>
+                
+                  
+                
+                
+
+              </article>
+            
+          </article>
+        </div>
+      </div>
+    </div>
+    
+      <div class="d-none d-lg-block col-lg-2 toc-container" id="toc-ctn">
+        <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+      </div>
+    
+  </div>
+</div>
+
+<!-- Custom -->
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v"
+                 for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+
+    
+  </main>
+
+  <footer class="text-center mt-5 py-3">
+  <div class="footer-content">
+     <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+  </div>
+  
+  <div class="statistics">
+    
+    
+
+    
+      
+        <!-- 不蒜子统计PV -->
+        <span id="busuanzi_container_site_pv" style="display: none">
+            总访问量 
+            <span id="busuanzi_value_site_pv"></span>
+             次
+          </span>
+      
+      
+        <!-- 不蒜子统计UV -->
+        <span id="busuanzi_container_site_uv" style="display: none">
+            总访客数 
+            <span id="busuanzi_value_site_uv"></span>
+             人
+          </span>
+      
+    
+  </div>
+
+
+  
+
+  
+</footer>
+
+
+  <!-- SCRIPTS -->
+  
+  <script  src="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" ></script>
+<script  src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+<!-- Plugins -->
+
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+  
+
+
+
+  
+    <script  src="https://cdn.jsdelivr.net/npm/tocbot@4/dist/tocbot.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/anchor-js@4/anchor.min.js" ></script>
+  
+  
+    <script defer src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js" ></script>
+  
+
+
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+  <script  src="https://cdn.jsdelivr.net/npm/typed.js@2/lib/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var title = document.getElementById('subtitle').title;
+      
+        typing(title);
+      
+    })(window, document);
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+<!-- 主题的启动项 保持在最底部 -->
+<script  src="/js/boot.js" ></script>
+
+
+</body>
+</html>

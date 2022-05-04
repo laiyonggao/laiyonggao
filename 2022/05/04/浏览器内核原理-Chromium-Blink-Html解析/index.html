@@ -1,0 +1,536 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/touxiang.jpg">
+  <link rel="icon" href="/img/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Laiyonggao">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="前言HTML文本是怎么解析，这是这章要讲解的内容。我调试的这个版本是没有新起个BackgroundThread解析文本的，所以下面的所有流程都是在blink的主线程执行，文章中涉及很多post task都是在主线程post和执行task的。 解析数据结构变化Html (文本)-&gt; Vecter&lt;char&gt; （多个char数组）-&gt; Deque&lt;SegmentedSub">
+<meta property="og:type" content="article">
+<meta property="og:title" content="浏览器内核原理--Chromium Blink Html解析">
+<meta property="og:url" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90/index.html">
+<meta property="og:site_name" content="赖勇高">
+<meta property="og:description" content="前言HTML文本是怎么解析，这是这章要讲解的内容。我调试的这个版本是没有新起个BackgroundThread解析文本的，所以下面的所有流程都是在blink的主线程执行，文章中涉及很多post task都是在主线程post和执行task的。 解析数据结构变化Html (文本)-&gt; Vecter&lt;char&gt; （多个char数组）-&gt; Deque&lt;SegmentedSub">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E5%8F%98%E5%8C%96.jpg">
+<meta property="og:image" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90/%E6%97%B6%E5%BA%8F%E5%9B%BE.jpg">
+<meta property="article:published_time" content="2022-05-04T06:37:51.000Z">
+<meta property="article:modified_time" content="2022-05-04T07:01:03.878Z">
+<meta property="article:author" content="Laiyonggao">
+<meta property="article:tag" content="Parse">
+<meta property="article:tag" content="Token">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="http://example.com/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E5%8F%98%E5%8C%96.jpg">
+  
+  
+  <title>浏览器内核原理--Chromium Blink Html解析 - 赖勇高</title>
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css" />
+
+
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4/github-markdown.min.css" />
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hint.css@2/hint.min.css" />
+
+  
+    
+    
+      
+      <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@10/styles/github-gist.min.css" />
+    
+  
+
+  
+    <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css" />
+  
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_ba1fz6golrf.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+<!-- 自定义样式保持在最底部 -->
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.8.14","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"right","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"copy_btn":true,"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  <header style="height: 70vh;">
+    <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>赖勇高</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div class="banner" id="banner" parallax=true
+         style="background: url('/img/default.png') no-repeat center center;
+           background-size: cover;">
+      <div class="full-bg-img">
+        <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+          <div class="page-header text-center fade-in-up">
+            <span class="h2" id="subtitle" title="浏览器内核原理--Chromium Blink Html解析">
+              
+            </span>
+
+            
+              <div class="mt-3">
+  
+  
+    <span class="post-meta">
+      <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+      <time datetime="2022-05-04 14:37" pubdate>
+        2022年5月4日 下午
+      </time>
+    </span>
+  
+</div>
+
+<div class="mt-1">
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-chart"></i>
+      17k 字
+    </span>
+  
+
+  
+    <span class="post-meta mr-2">
+      <i class="iconfont icon-clock-fill"></i>
+      
+      
+      143 分钟
+    </span>
+  
+
+  
+  
+</div>
+
+            
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="d-none d-lg-block col-lg-2"></div>
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div class="py-5" id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">浏览器内核原理--Chromium Blink Html解析</h1>
+            
+            <div class="markdown-body">
+              <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>HTML文本是怎么解析，这是这章要讲解的内容。我调试的这个版本是没有新起个BackgroundThread解析文本的，所以下面的所有流程都是在blink的主线程执行，文章中涉及很多post task都是在主线程post和执行task的。</p>
+<h2 id="解析数据结构变化"><a href="#解析数据结构变化" class="headerlink" title="解析数据结构变化"></a>解析数据结构变化</h2><p><img src="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E5%8F%98%E5%8C%96.jpg" srcset="/img/loading.gif" lazyload alt="数据结构变化"><br>Html (文本)-&gt; Vecter&lt;char&gt; （多个char数组）-&gt; Deque&lt;SegmentedSubstring&gt; （Deque容器） -&gt; HTMLToken （生成一系列的token） -&gt; CompactHTMLToken （每一个HTMLToken对应一个token） -&gt; TokenizedChunk （多个token组成一个chunk）-&gt; Deque&lt;std::unique_ptr&lt;TokenizedChunk&gt;&gt;（多个chunk写入Deque容器） -&gt;TokenizedChunk-&gt; AtomicHTMLToken （一个CompactHTMLToken转换成AtomicHTMLToken） -&gt; HTMLElement （根据AtomicHTMLToken生成HTMLElement）</p>
+<h2 id="解析步骤"><a href="#解析步骤" class="headerlink" title="解析步骤"></a>解析步骤</h2><p>1.Blink端接收网络端返回的分块数据<br>2.Blink的主线程Post Task BackgroundHTMLParser::AppendRawBytesFromMainThread到当前线程执行解析操作<br>3.进行Decode解码操作，例如UTF-8，Unicode，GB2312等<br>4.解析解码后的文本为一系列的HTMLToken，然后转换成CompactHTMLToken，并保存到TokenizedChunk里<br>5.PostTask任务执行NotifyPendingTokenizedChunks，把解析好的TokenizedChunk传递到Deque&lt;std::unique_ptr&lt;TokenizedChunk&gt;&gt; speculations_。<br>6.PostTask进行唤醒解析调度器执行HTMLParserScheduler::ContinueParsing<br>7.执行ConstructTreeFromCompactHTMLToken根据CompactHTMLToken生成AtomicHTMLToken<br>8.AtomicHTMLToken生成对应的Element</p>
+<h2 id="时序图"><a href="#时序图" class="headerlink" title="时序图"></a>时序图</h2><p><img src="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90/%E6%97%B6%E5%BA%8F%E5%9B%BE.jpg" srcset="/img/loading.gif" lazyload alt="时序图"></p>
+<h3 id="第一步：Blink端接收网络端的分块数据，执行HTMLDocumentParser-AppendByte"><a href="#第一步：Blink端接收网络端的分块数据，执行HTMLDocumentParser-AppendByte" class="headerlink" title="第一步：Blink端接收网络端的分块数据，执行HTMLDocumentParser::AppendByte"></a>第一步：Blink端接收网络端的分块数据，执行HTMLDocumentParser::AppendByte</h3><figure class="highlight c++"><table><tr><td class="gutter"><div class="code-wrapper"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></div></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLDocumentParser::AppendBytes</span><span class="hljs-params">(<span class="hljs-type">const</span> <span class="hljs-type">char</span>* data, <span class="hljs-type">size_t</span> length)</span> </span>&#123;<br>  <span class="hljs-keyword">if</span> (!length || <span class="hljs-built_in">IsStopped</span>())<br>    <span class="hljs-keyword">return</span>;<br><br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">ShouldUseThreading</span>()) &#123; <span class="hljs-comment">// 这个标志是true，但是并没有创建新的线程，还是在main线程执行</span><br>    <span class="hljs-keyword">if</span> (!have_background_parser_)<br>      <span class="hljs-built_in">StartBackgroundParser</span>();<br><br>    std::unique_ptr&lt;Vector&lt;<span class="hljs-type">char</span>&gt;&gt; buffer =<br>        WTF::MakeUnique&lt;Vector&lt;<span class="hljs-type">char</span>&gt;&gt;(length);<br>    <span class="hljs-built_in">memcpy</span>(buffer-&gt;<span class="hljs-built_in">data</span>(), data, length);  <span class="hljs-comment">// data数据做了个拷贝操作</span><br>    <span class="hljs-built_in">TRACE_EVENT1</span>(<span class="hljs-built_in">TRACE_DISABLED_BY_DEFAULT</span>(<span class="hljs-string">&quot;blink.debug&quot;</span>),<br>                 <span class="hljs-string">&quot;HTMLDocumentParser::appendBytes&quot;</span>, <span class="hljs-string">&quot;size&quot;</span>, (<span class="hljs-type">unsigned</span>)length);<br><br>    loading_task_runner_-&gt;<span class="hljs-built_in">PostTask</span>(<br>        BLINK_FROM_HERE,<br>        WTF::<span class="hljs-built_in">Bind</span>(&amp;BackgroundHTMLParser::AppendRawBytesFromMainThread,<br>                  background_parser_, WTF::<span class="hljs-built_in">Passed</span>(std::<span class="hljs-built_in">move</span>(buffer)))); <span class="hljs-comment">// post task 执行AppendRawBytesFromMainThread</span><br>    <span class="hljs-keyword">return</span>;<br>  &#125;<br><br>  DecodedDataDocumentParser::<span class="hljs-built_in">AppendBytes</span>(data, length);<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>上面代码可以看出，这边首先判断是否启动线程去解析data，这里没搞明白，即使为true也没有创建解析线程，我能想到的是应该是以前的background线程解析代码还没有完全移除完，在共用这段代码。<br>接下这里会做个data数据拷贝操作，就是把data拷贝到std::unique_ptr&lt;Vector<char>&gt;变量上。<br>主线程给自己post task任务，传递的参数就是buffer文本数据。</p>
+<h3 id="第二步：执行任务AppendRawBytesFromMainThread"><a href="#第二步：执行任务AppendRawBytesFromMainThread" class="headerlink" title="第二步：执行任务AppendRawBytesFromMainThread"></a>第二步：执行任务AppendRawBytesFromMainThread</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">BackgroundHTMLParser::AppendRawBytesFromMainThread</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    std::unique_ptr&lt;Vector&lt;<span class="hljs-type">char</span>&gt;&gt; buffer)</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(decoder_);<br>  <span class="hljs-built_in">UpdateDocument</span>(decoder_-&gt;<span class="hljs-built_in">Decode</span>(buffer-&gt;<span class="hljs-built_in">data</span>(), buffer-&gt;<span class="hljs-built_in">size</span>())); <span class="hljs-comment">// 先进行data解码操作</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<p>上面可以看出decoder_-&gt;Decode进行编码解码，把解码后的数据返回。</p>
+<h3 id="第三步：AppendDecodedBytes解码后的数据"><a href="#第三步：AppendDecodedBytes解码后的数据" class="headerlink" title="第三步：AppendDecodedBytes解码后的数据"></a>第三步：AppendDecodedBytes解码后的数据</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">BackgroundHTMLParser::AppendDecodedBytes</span><span class="hljs-params">(<span class="hljs-type">const</span> String&amp; input)</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(!input_.<span class="hljs-built_in">Current</span>().<span class="hljs-built_in">IsClosed</span>());<br>  input_.<span class="hljs-built_in">Append</span>(input); <span class="hljs-comment">// 把解码的数据保存到 BackgroundHTMLInputStream</span><br>  <span class="hljs-built_in">PumpTokenizer</span>(); <span class="hljs-comment">// 解析数据</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<p>上面可只主要做两个操作，1.保存解码后的数据 2.解析保存的数据</p>
+<h3 id="第四步：PumpTokenizer解析数据成HTMLToken，然后转换成CompactHTMLToken"><a href="#第四步：PumpTokenizer解析数据成HTMLToken，然后转换成CompactHTMLToken" class="headerlink" title="第四步：PumpTokenizer解析数据成HTMLToken，然后转换成CompactHTMLToken"></a>第四步：PumpTokenizer解析数据成HTMLToken，然后转换成CompactHTMLToken</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">BackgroundHTMLParser::PumpTokenizer</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-built_in">TRACE_EVENT0</span>(<span class="hljs-string">&quot;loading&quot;</span>, <span class="hljs-string">&quot;BackgroundHTMLParser::pumpTokenizer&quot;</span>);<br>  HTMLTreeBuilderSimulator::SimulatedToken simulated_token =<br>      HTMLTreeBuilderSimulator::kOtherToken;<br><br>  <span class="hljs-comment">// No need to start speculating until the main thread has almost caught up.</span><br>  <span class="hljs-keyword">if</span> (input_.<span class="hljs-built_in">TotalCheckpointTokenCount</span>() &gt; outstanding_token_limit_)<br>    <span class="hljs-keyword">return</span>;<br><br>  <span class="hljs-type">bool</span> should_notify_main_thread = <span class="hljs-literal">false</span>;<br>  <span class="hljs-keyword">while</span> (<span class="hljs-literal">true</span>) &#123;<br>    <span class="hljs-keyword">if</span> (xss_auditor_-&gt;<span class="hljs-built_in">IsEnabled</span>())<br>      source_tracker_.<span class="hljs-built_in">Start</span>(input_.<span class="hljs-built_in">Current</span>(), tokenizer_.<span class="hljs-built_in">get</span>(), *token_);<br><br>    <span class="hljs-keyword">if</span> (!tokenizer_-&gt;<span class="hljs-built_in">NextToken</span>(input_.<span class="hljs-built_in">Current</span>(), *token_)) &#123; <span class="hljs-comment">// 把解析文本成一个一个的token</span><br>      <span class="hljs-comment">// We&#x27;ve reached the end of our current input.</span><br>      should_notify_main_thread |= <span class="hljs-built_in">QueueChunkForMainThread</span>();<br>      <span class="hljs-keyword">break</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">if</span> (xss_auditor_-&gt;<span class="hljs-built_in">IsEnabled</span>())<br>      source_tracker_.<span class="hljs-built_in">end</span>(input_.<span class="hljs-built_in">Current</span>(), tokenizer_.<span class="hljs-built_in">get</span>(), *token_);<br><br>    &#123;<br>      TextPosition position = <span class="hljs-built_in">TextPosition</span>(input_.<span class="hljs-built_in">Current</span>().<span class="hljs-built_in">CurrentLine</span>(),<br>                                           input_.<span class="hljs-built_in">Current</span>().<span class="hljs-built_in">CurrentColumn</span>());<br><br>      <span class="hljs-keyword">if</span> (std::unique_ptr&lt;XSSInfo&gt; xss_info =<br>              xss_auditor_-&gt;<span class="hljs-built_in">FilterToken</span>(<span class="hljs-built_in">FilterTokenRequest</span>(<br>                  *token_, source_tracker_, tokenizer_-&gt;<span class="hljs-built_in">ShouldAllowCDATA</span>()))) &#123;<br>        xss_info-&gt;text_position_ = position;<br>        pending_xss_infos_.<span class="hljs-built_in">push_back</span>(std::<span class="hljs-built_in">move</span>(xss_info));<br>      &#125;<br><br>      <span class="hljs-function">CompactHTMLToken <span class="hljs-title">token</span><span class="hljs-params">(token_.get(), position)</span></span>; <span class="hljs-comment">// 将token转换成CompactHTMLToken</span><br><br>      <span class="hljs-type">bool</span> is_csp_meta_tag = <span class="hljs-literal">false</span>;<br>      preload_scanner_-&gt;<span class="hljs-built_in">Scan</span>(token, input_.<span class="hljs-built_in">Current</span>(), pending_preloads_,<br>                             &amp;viewport_description_, &amp;is_csp_meta_tag); <span class="hljs-comment">// 预扫描url</span><br><br>      simulated_token =<br>          tree_builder_simulator_.<span class="hljs-built_in">Simulate</span>(token, tokenizer_.<span class="hljs-built_in">get</span>());<br><br>      <span class="hljs-comment">// Break chunks before a script tag is inserted and flag the chunk as</span><br>      <span class="hljs-comment">// starting a script so the main parser can decide if it should yield</span><br>      <span class="hljs-comment">// before processing the chunk.</span><br>      <span class="hljs-keyword">if</span> (simulated_token == HTMLTreeBuilderSimulator::kScriptStart) &#123;<br>        should_notify_main_thread |= <span class="hljs-built_in">QueueChunkForMainThread</span>();<br>        starting_script_ = <span class="hljs-literal">true</span>;<br>      &#125;<br><br>      pending_tokens_-&gt;<span class="hljs-built_in">push_back</span>(token); <span class="hljs-comment">// 把CompactHTMLToken 存放到Vector&lt;CompactHTMLToken&gt; 数组中</span><br>      <span class="hljs-keyword">if</span> (is_csp_meta_tag) &#123;<br>        pending_csp_meta_token_index_ = pending_tokens_-&gt;<span class="hljs-built_in">size</span>() - <span class="hljs-number">1</span>;<br>      &#125;<br>    &#125;<br><br>    token_-&gt;<span class="hljs-built_in">Clear</span>();<br><br>    <span class="hljs-keyword">if</span> (simulated_token == HTMLTreeBuilderSimulator::kScriptEnd ||<br>        simulated_token == HTMLTreeBuilderSimulator::kStyleEnd ||<br>        simulated_token == HTMLTreeBuilderSimulator::kLink ||<br>        pending_tokens_-&gt;<span class="hljs-built_in">size</span>() &gt;= pending_token_limit_) &#123; <span class="hljs-comment">// 当解析的tokens大于限制的token数，则把 把pending_tokens_的内容传递给MainThread</span><br>      should_notify_main_thread |= <span class="hljs-built_in">QueueChunkForMainThread</span>(); <span class="hljs-comment">// 把pending_tokens_的内容传递给MainThread</span><br>      <span class="hljs-comment">// If we&#x27;re far ahead of the main thread, yield for a bit to avoid</span><br>      <span class="hljs-comment">// consuming too much memory.</span><br>      <span class="hljs-keyword">if</span> (input_.<span class="hljs-built_in">TotalCheckpointTokenCount</span>() &gt; outstanding_token_limit_) <span class="hljs-comment">// 如果主线程积累了超过限制的token没有处理，则停止文本解析</span><br>        <span class="hljs-keyword">break</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">if</span> (!should_coalesce_chunks_ &amp;&amp; should_notify_main_thread) &#123;<br>      <span class="hljs-built_in">RunOnMainThread</span>(&amp;HTMLDocumentParser::NotifyPendingTokenizedChunks,<br>                      parser_); <span class="hljs-comment">// post task 到主线程执行NotifyPendingTokenizedChunks</span><br>      should_notify_main_thread = <span class="hljs-literal">false</span>;<br>    &#125;<br>  &#125;<br>  <span class="hljs-comment">// Wait to notify the main thread about the chunks until we&#x27;re at the limit.</span><br>  <span class="hljs-comment">// This lets the background parser generate lots of valuable preloads before</span><br>  <span class="hljs-comment">// anything expensive (extensions, scripts) take up time on the main thread. A</span><br>  <span class="hljs-comment">// busy main thread can cause preload delays.</span><br>  <span class="hljs-keyword">if</span> (should_notify_main_thread) &#123;<br>    <span class="hljs-built_in">RunOnMainThread</span>(&amp;HTMLDocumentParser::NotifyPendingTokenizedChunks, parser_); <span class="hljs-comment">// post task 到主线程执行NotifyPendingTokenizedChunks</span><br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>由上可知进行以下操作：</p>
+<p>1.执行 tokenizer_-&gt;NextToken 解析成token。<br>2.通过 CompactHTMLToken token(token_.get(), position)把HTMLToken转换成CompactHTMLToken。<br>3.preload_scanner_-&gt;Scan进行预扫描一些link，js，css的链接。（为什么要预扫描，其实是为了在解析的空闲时候，预发起网络请求提前加载子资源）<br>4.pending_tokens_-&gt;size() &gt;&#x3D; pending_token_limit_当解析的tokens大于限制的token数，则把pending_tokens_的内容传递给MainThread。 pending_token_limit_的值是1000<br>5.input_.TotalCheckpointTokenCount() &gt; outstanding_token_limit_如果主线程积累了超过限制的token没有处理，则停止文本解析。outstanding_token_limit_的值是10000，这样做的目的是为了节省内存，太多的Token没有处理生成Element，再解析下去也是没有意义的。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">size_t</span> kDefaultOutstandingTokenLimit = <span class="hljs-number">10000</span>;<br><br><span class="hljs-comment">// We limit our chucks to 1000 tokens, to make sure the main thread is never</span><br><span class="hljs-comment">// waiting on the parser thread for tokens. This was tuned in</span><br><span class="hljs-comment">// https://bugs.webkit.org/show_bug.cgi?id=110408.</span><br><span class="hljs-type">static</span> <span class="hljs-type">const</span> <span class="hljs-type">size_t</span> kDefaultPendingTokenLimit = <span class="hljs-number">1000</span>;<br></code></pre></td></tr></table></figure>
+<p>6.执行QueueChunkForMainThread，将解析好的pending_tokens_传递到主线程，这里的传递并没有通过函数参数，而是通过一个类的变量进行传递tokenized_chunk_queue_。函数实现如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">BackgroundHTMLParser::QueueChunkForMainThread</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-keyword">if</span> (pending_tokens_-&gt;<span class="hljs-built_in">IsEmpty</span>())<br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br><br><span class="hljs-meta">#<span class="hljs-keyword">if</span> DCHECK_IS_ON()</span><br>  <span class="hljs-built_in">CheckThatTokensAreSafeToSendToAnotherThread</span>(pending_tokens_.<span class="hljs-built_in">get</span>());<br>  <span class="hljs-built_in">CheckThatPreloadsAreSafeToSendToAnotherThread</span>(pending_preloads_);<br>  <span class="hljs-built_in">CheckThatXSSInfosAreSafeToSendToAnotherThread</span>(pending_xss_infos_);<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br><br>  std::unique_ptr&lt;HTMLDocumentParser::TokenizedChunk&gt; chunk =<br>      WTF::<span class="hljs-built_in">WrapUnique</span>(<span class="hljs-keyword">new</span> HTMLDocumentParser::TokenizedChunk);<br>  <span class="hljs-built_in">TRACE_EVENT_WITH_FLOW0</span>(<span class="hljs-string">&quot;blink,loading&quot;</span>,<br>                         <span class="hljs-string">&quot;BackgroundHTMLParser::sendTokensToMainThread&quot;</span>,<br>                         chunk.<span class="hljs-built_in">get</span>(), TRACE_EVENT_FLAG_FLOW_OUT);<br><br>  chunk-&gt;preloads.<span class="hljs-built_in">swap</span>(pending_preloads_);<br>  <span class="hljs-keyword">if</span> (viewport_description_.set)<br>    chunk-&gt;viewport = viewport_description_;<br>  chunk-&gt;xss_infos.<span class="hljs-built_in">swap</span>(pending_xss_infos_);<br>  chunk-&gt;tokenizer_state = tokenizer_-&gt;<span class="hljs-built_in">GetState</span>();<br>  chunk-&gt;tree_builder_state = tree_builder_simulator_.<span class="hljs-built_in">GetState</span>();<br>  chunk-&gt;input_checkpoint = input_.<span class="hljs-built_in">CreateCheckpoint</span>(pending_tokens_-&gt;<span class="hljs-built_in">size</span>());<br>  chunk-&gt;preload_scanner_checkpoint = preload_scanner_-&gt;<span class="hljs-built_in">CreateCheckpoint</span>();<br>  chunk-&gt;tokens = std::<span class="hljs-built_in">move</span>(pending_tokens_);<br>  chunk-&gt;starting_script = starting_script_;<br>  chunk-&gt;pending_csp_meta_token_index = pending_csp_meta_token_index_;<br>  starting_script_ = <span class="hljs-literal">false</span>;<br>  pending_csp_meta_token_index_ =<br>      HTMLDocumentParser::TokenizedChunk::kNoPendingToken;<br><br>  <span class="hljs-type">bool</span> is_empty = tokenized_chunk_queue_-&gt;<span class="hljs-built_in">Enqueue</span>(std::<span class="hljs-built_in">move</span>(chunk)); <span class="hljs-comment">// chunk存进在tokenized_chunk_queue_队列中</span><br><br>  pending_tokens_ = WTF::<span class="hljs-built_in">WrapUnique</span>(<span class="hljs-keyword">new</span> CompactHTMLTokenStream);<br>  <span class="hljs-keyword">return</span> is_empty;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>tokenized_chunk_queue_的值是谁设置过来的？其实就是HTMLDocumentParser::tokenized_chunk_queue_</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs C++">BackgroundHTMLParser::<span class="hljs-built_in">BackgroundHTMLParser</span>(<br>    std::unique_ptr&lt;Configuration&gt; config,<br>    RefPtr&lt;WebTaskRunner&gt; loading_task_runner)<br>    : <span class="hljs-built_in">weak_factory_</span>(<span class="hljs-keyword">this</span>),<br>      <span class="hljs-built_in">token_</span>(WTF::<span class="hljs-built_in">WrapUnique</span>(<span class="hljs-keyword">new</span> HTMLToken)),<br>      <span class="hljs-built_in">tokenizer_</span>(HTMLTokenizer::<span class="hljs-built_in">Create</span>(config-&gt;options)),<br>      <span class="hljs-built_in">tree_builder_simulator_</span>(config-&gt;options),<br>      <span class="hljs-built_in">options_</span>(config-&gt;options),<br>      <span class="hljs-built_in">outstanding_token_limit_</span>(config-&gt;outstanding_token_limit),<br>      <span class="hljs-built_in">parser_</span>(config-&gt;parser),<br>      <span class="hljs-built_in">pending_tokens_</span>(WTF::<span class="hljs-built_in">WrapUnique</span>(<span class="hljs-keyword">new</span> CompactHTMLTokenStream)),<br>      <span class="hljs-built_in">pending_token_limit_</span>(config-&gt;pending_token_limit),<br>      <span class="hljs-built_in">xss_auditor_</span>(std::<span class="hljs-built_in">move</span>(config-&gt;xss_auditor)),<br>      <span class="hljs-built_in">decoder_</span>(std::<span class="hljs-built_in">move</span>(config-&gt;decoder)),<br>      <span class="hljs-built_in">loading_task_runner_</span>(std::<span class="hljs-built_in">move</span>(loading_task_runner)),<br>      <span class="hljs-built_in">tokenized_chunk_queue_</span>(std::<span class="hljs-built_in">move</span>(config-&gt;tokenized_chunk_queue)), <span class="hljs-comment">// 设置tokenized_chunk_queue_值</span><br>      <span class="hljs-built_in">pending_csp_meta_token_index_</span>(<br>          HTMLDocumentParser::TokenizedChunk::kNoPendingToken),<br>      <span class="hljs-built_in">starting_script_</span>(<span class="hljs-literal">false</span>),<br>      <span class="hljs-built_in">should_coalesce_chunks_</span>(config-&gt;should_coalesce_chunks) &#123;<br>  <span class="hljs-built_in">DCHECK_GT</span>(outstanding_token_limit_, <span class="hljs-number">0u</span>);<br>  <span class="hljs-built_in">DCHECK_GT</span>(pending_token_limit_, <span class="hljs-number">0u</span>);<br>  <span class="hljs-built_in">DCHECK_GE</span>(outstanding_token_limit_, pending_token_limit_);<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>7.post一个任务NotifyPendingTokenizedChunks，告诉主线程已经解析出来了Tokens</p>
+<h3 id="第五步：执行NotifyPendingTokenizedChunks"><a href="#第五步：执行NotifyPendingTokenizedChunks" class="headerlink" title="第五步：执行NotifyPendingTokenizedChunks"></a>第五步：执行NotifyPendingTokenizedChunks</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLDocumentParser::NotifyPendingTokenizedChunks</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-built_in">TRACE_EVENT0</span>(<span class="hljs-string">&quot;blink&quot;</span>, <span class="hljs-string">&quot;HTMLDocumentParser::notifyPendingTokenizedChunks&quot;</span>);<br>  <span class="hljs-built_in">DCHECK</span>(tokenized_chunk_queue_);<br><br>  Vector&lt;std::unique_ptr&lt;TokenizedChunk&gt;&gt; pending_chunks;<br>  tokenized_chunk_queue_-&gt;<span class="hljs-built_in">TakeAll</span>(pending_chunks); <span class="hljs-comment">// 取出所有的chunks</span><br><br>  <span class="hljs-keyword">if</span> (!<span class="hljs-built_in">IsParsing</span>())<br>    <span class="hljs-keyword">return</span>;<br><br>  <span class="hljs-comment">// ApplicationCache needs to be initialized before issuing preloads. We</span><br>  <span class="hljs-comment">// suspend preload until HTMLHTMLElement is inserted and ApplicationCache is</span><br>  <span class="hljs-comment">// initialized. Note: link rel preloads don&#x27;t follow this policy per the spec.</span><br>  <span class="hljs-comment">// These directives should initiate a fetch as fast as possible.</span><br>  <span class="hljs-keyword">if</span> (!tried_loading_link_headers_ &amp;&amp; <span class="hljs-built_in">GetDocument</span>()-&gt;<span class="hljs-built_in">Loader</span>() &amp;&amp;<br>      !pending_chunks.<span class="hljs-built_in">IsEmpty</span>()) &#123;<br>    <span class="hljs-comment">// Note that on commit, the loader dispatched preloads for all the non-media</span><br>    <span class="hljs-comment">// links.</span><br>    <span class="hljs-built_in">GetDocument</span>()-&gt;<span class="hljs-built_in">Loader</span>()-&gt;<span class="hljs-built_in">DispatchLinkHeaderPreloads</span>(<br>        &amp;pending_chunks.<span class="hljs-built_in">front</span>()-&gt;viewport, LinkLoader::kOnlyLoadMedia);<br>    tried_loading_link_headers_ = <span class="hljs-literal">true</span>;<br>  &#125;<br><br>  <span class="hljs-comment">// Defer preloads if any of the chunks contains a &lt;meta&gt; csp tag.</span><br>  <span class="hljs-keyword">for</span> (<span class="hljs-keyword">auto</span>&amp; chunk : pending_chunks) &#123;<br>    <span class="hljs-keyword">if</span> (chunk-&gt;pending_csp_meta_token_index !=<br>        TokenizedChunk::kNoPendingToken) &#123;<br>      pending_csp_meta_token_ =<br>          &amp;chunk-&gt;tokens-&gt;<span class="hljs-built_in">at</span>(chunk-&gt;pending_csp_meta_token_index);<br>    &#125;<br>  &#125;<br><br>  <span class="hljs-keyword">if</span> (pending_csp_meta_token_ || !<span class="hljs-built_in">GetDocument</span>()-&gt;<span class="hljs-built_in">documentElement</span>()) &#123;<br>    PreloadRequestStream link_rel_preloads;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">auto</span>&amp; chunk : pending_chunks) &#123;<br>      <span class="hljs-keyword">for</span> (<span class="hljs-keyword">auto</span>&amp; request : chunk-&gt;preloads) &#123;<br>        <span class="hljs-comment">// Link rel preloads don&#x27;t need to wait for AppCache but they</span><br>        <span class="hljs-comment">// should probably wait for CSP.</span><br>        <span class="hljs-keyword">if</span> (!pending_csp_meta_token_ &amp;&amp; request-&gt;<span class="hljs-built_in">IsLinkRelPreload</span>())<br>          link_rel_preloads.<span class="hljs-built_in">push_back</span>(std::<span class="hljs-built_in">move</span>(request));<br>        <span class="hljs-keyword">else</span><br>          queued_preloads_.<span class="hljs-built_in">push_back</span>(std::<span class="hljs-built_in">move</span>(request));<br>      &#125;<br>    &#125;<br>    preloader_-&gt;<span class="hljs-built_in">TakeAndPreload</span>(link_rel_preloads);<br>  &#125; <span class="hljs-keyword">else</span> &#123;<br>    <span class="hljs-comment">// We can safely assume that there are no queued preloads request after the</span><br>    <span class="hljs-comment">// document element is available, as we empty the queue immediately after</span><br>    <span class="hljs-comment">// the document element is created in documentElementAvailable().</span><br>    <span class="hljs-built_in">DCHECK</span>(queued_preloads_.<span class="hljs-built_in">IsEmpty</span>());<br>    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">auto</span>&amp; chunk : pending_chunks)<br>      preloader_-&gt;<span class="hljs-built_in">TakeAndPreload</span>(chunk-&gt;preloads); <span class="hljs-comment">// 预加载子资源</span><br>  &#125;<br><br>  <span class="hljs-keyword">for</span> (<span class="hljs-keyword">auto</span>&amp; chunk : pending_chunks)<br>    speculations_.<span class="hljs-built_in">push_back</span>(std::<span class="hljs-built_in">move</span>(chunk)); <span class="hljs-comment">// 把chunk保存到speculations_中</span><br><br>  <span class="hljs-keyword">if</span> (!<span class="hljs-built_in">IsPaused</span>() &amp;&amp; !<span class="hljs-built_in">IsScheduledForResume</span>()) &#123;<br>    <span class="hljs-keyword">if</span> (tasks_were_suspended_)<br>      parser_scheduler_-&gt;<span class="hljs-built_in">ForceResumeAfterYield</span>();<br>    <span class="hljs-keyword">else</span><br>      parser_scheduler_-&gt;<span class="hljs-built_in">ScheduleForResume</span>(); <span class="hljs-comment">// 唤起解析调度</span><br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>1.首先把BackgroundHTMLParser传递的TokenizedChunk放到临时变量pending_chunks中</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">struct</span> <span class="hljs-title class_">TokenizedChunk</span> &#123;<br>  <span class="hljs-built_in">USING_FAST_MALLOC</span>(TokenizedChunk);<br><br> <span class="hljs-keyword">public</span>:<br>  std::unique_ptr&lt;CompactHTMLTokenStream&gt; tokens; <span class="hljs-comment">// token的集合</span><br>  PreloadRequestStream preloads;<br>  ViewportDescriptionWrapper viewport;<br>  XSSInfoStream xss_infos;<br>  HTMLTokenizer::State tokenizer_state;<br>  HTMLTreeBuilderSimulator::State tree_builder_state;<br>  HTMLInputCheckpoint input_checkpoint;<br>  TokenPreloadScannerCheckpoint preload_scanner_checkpoint;<br>  <span class="hljs-type">bool</span> starting_script;<br>  <span class="hljs-comment">// Index into |tokens| of the last &lt;meta&gt; csp tag in |tokens|. Preloads will</span><br>  <span class="hljs-comment">// be deferred until this token is parsed. Will be noPendingToken if there</span><br>  <span class="hljs-comment">// are no csp tokens.</span><br>  <span class="hljs-type">int</span> pending_csp_meta_token_index;<br><br>  <span class="hljs-type">static</span> <span class="hljs-keyword">constexpr</span> <span class="hljs-type">int</span> kNoPendingToken = <span class="hljs-number">-1</span>;<br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>TokenizedChunk 为CompactHTMLToken的集合，成员变量tokens中看出。CompactHTMLTokenStream的声明可以看如下</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-keyword">typedef</span> Vector&lt;CompactHTMLToken&gt; CompactHTMLTokenStream;<br></code></pre></td></tr></table></figure>
+<p>2.TakeAndPreload预加载扫描出来的子资源，为什么要预加载，因为在解析流程里如果遇到js是要停止解析，然后执行js。在执行js的时候网络线程是空闲的，blink可以提取发起子资源的请求，节省时间，提升效率。<br>3.pending_chunks遍历出来放入到speculations_中<br>4.ScheduleForResume唤起解析调度</p>
+<h3 id="第六步：post-task执行ContinueParsing"><a href="#第六步：post-task执行ContinueParsing" class="headerlink" title="第六步：post task执行ContinueParsing"></a>第六步：post task执行ContinueParsing</h3><p>这个函数是唤醒解析调度，继续解析。一般在什么情况会调用：<br>1.当有pending_chunks过来时候会调度<br>2.解析阶段因为js执行被中断，js执行完后会调度</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLParserScheduler::ScheduleForResume</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-built_in">DCHECK</span>(!is_suspended_with_active_timer_);<br>  cancellable_continue_parse_task_handle_ =<br>      loading_task_runner_-&gt;<span class="hljs-built_in">PostCancellableTask</span>(<br>          BLINK_FROM_HERE, WTF::<span class="hljs-built_in">Bind</span>(&amp;HTMLParserScheduler::ContinueParsing,<br>                                     <span class="hljs-built_in">WrapWeakPersistent</span>(<span class="hljs-keyword">this</span>)));<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="第七步：执行PumpPendingSpeculations"><a href="#第七步：执行PumpPendingSpeculations" class="headerlink" title="第七步：执行PumpPendingSpeculations"></a>第七步：执行PumpPendingSpeculations</h3><p>执行ContinueParsing最终会执行PumpPendingSpeculations。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLDocumentParser::PumpPendingSpeculations</span><span class="hljs-params">()</span> </span>&#123;<br>  <span class="hljs-comment">// If this assert fails, you need to call validateSpeculations to make sure</span><br>  <span class="hljs-comment">// m_tokenizer and m_token don&#x27;t have state that invalidates m_speculations.</span><br>  <span class="hljs-built_in">DCHECK</span>(!tokenizer_);<br>  <span class="hljs-built_in">DCHECK</span>(!token_);<br>  <span class="hljs-built_in">DCHECK</span>(!last_chunk_before_pause_);<br>  <span class="hljs-built_in">DCHECK</span>(!<span class="hljs-built_in">IsPaused</span>());<br>  <span class="hljs-built_in">DCHECK</span>(!<span class="hljs-built_in">IsStopped</span>());<br>  <span class="hljs-built_in">DCHECK</span>(!<span class="hljs-built_in">IsScheduledForResume</span>());<br>  <span class="hljs-built_in">DCHECK</span>(!<span class="hljs-built_in">InPumpSession</span>());<br><br>  <span class="hljs-comment">// <span class="hljs-doctag">FIXME:</span> Here should never be reached when there is a blocking script,</span><br>  <span class="hljs-comment">// but it happens in unknown scenarios. See https://crbug.com/440901</span><br>  <span class="hljs-keyword">if</span> (<span class="hljs-built_in">IsWaitingForScripts</span>()) &#123;<br>    parser_scheduler_-&gt;<span class="hljs-built_in">ScheduleForResume</span>();<br>    <span class="hljs-keyword">return</span>;<br>  &#125;<br><br>  <span class="hljs-comment">// Do not allow pumping speculations in nested event loops.</span><br>  <span class="hljs-keyword">if</span> (pump_speculations_session_nesting_level_) &#123;<br>    parser_scheduler_-&gt;<span class="hljs-built_in">ScheduleForResume</span>();<br>    <span class="hljs-keyword">return</span>;<br>  &#125;<br><br>  <span class="hljs-function">probe::ParseHTML <span class="hljs-title">probe</span><span class="hljs-params">(GetDocument(), <span class="hljs-keyword">this</span>)</span></span>;<br><br>  <span class="hljs-function">SpeculationsPumpSession <span class="hljs-title">session</span><span class="hljs-params">(pump_speculations_session_nesting_level_)</span></span>;<br>  <span class="hljs-keyword">while</span> (!speculations_.<span class="hljs-built_in">IsEmpty</span>()) &#123;<br>    <span class="hljs-built_in">DCHECK</span>(!<span class="hljs-built_in">IsScheduledForResume</span>());<br>    <span class="hljs-type">size_t</span> element_token_count =<br>        <span class="hljs-built_in">ProcessTokenizedChunkFromBackgroundParser</span>(speculations_.<span class="hljs-built_in">TakeFirst</span>());<br>    session.<span class="hljs-built_in">AddedElementTokens</span>(element_token_count);<br><br>    <span class="hljs-comment">// Always check isParsing first as m_document may be null. Surprisingly,</span><br>    <span class="hljs-comment">// isScheduledForResume() may be set here as a result of</span><br>    <span class="hljs-comment">// processTokenizedChunkFromBackgroundParser running arbitrary javascript</span><br>    <span class="hljs-comment">// which invokes nested event loops. (e.g. inspector breakpoints)</span><br>    <span class="hljs-built_in">CheckIfBodyStylesheetAdded</span>();<br>    <span class="hljs-keyword">if</span> (!<span class="hljs-built_in">IsParsing</span>() || <span class="hljs-built_in">IsPaused</span>() || <span class="hljs-built_in">IsScheduledForResume</span>())<br>      <span class="hljs-keyword">break</span>;<br><br>    <span class="hljs-keyword">if</span> (speculations_.<span class="hljs-built_in">IsEmpty</span>() ||<br>        parser_scheduler_-&gt;<span class="hljs-built_in">YieldIfNeeded</span>(<br>            session, speculations_.<span class="hljs-built_in">front</span>()-&gt;starting_script))<br>      <span class="hljs-keyword">break</span>;<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>PumpPendingSpeculations函数作用：<br>1.IsWaitingForScripts判断是否在执行js，如果在执行则停止解析，post task进行唤醒下次调度（所以在解析遇到js标签时候会停止解析，然后执行js，执行完js后再继续解析）<br>2.遍历Deque&lt;std::unique_ptr<TokenizedChunk>&gt;，根据TokenizedChunk去生成Element</p>
+<h3 id="第八步：根据TokenizedChunk构建Tree"><a href="#第八步：根据TokenizedChunk构建Tree" class="headerlink" title="第八步：根据TokenizedChunk构建Tree"></a>第八步：根据TokenizedChunk构建Tree</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">size_t</span> <span class="hljs-title">HTMLDocumentParser::ProcessTokenizedChunkFromBackgroundParser</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    std::unique_ptr&lt;TokenizedChunk&gt; pop_chunk)</span> </span>&#123;<br>......<br>  <span class="hljs-keyword">for</span> (Vector&lt;CompactHTMLToken&gt;::const_iterator it = tokens-&gt;<span class="hljs-built_in">begin</span>();<br>       it != tokens-&gt;<span class="hljs-built_in">end</span>(); ++it) &#123;<br>    <span class="hljs-built_in">DCHECK</span>(!<span class="hljs-built_in">IsWaitingForScripts</span>());<br>......<br>      <span class="hljs-keyword">if</span> (tokens-&gt;<span class="hljs-built_in">back</span>().<span class="hljs-built_in">GetType</span>() == HTMLToken::kEndOfFile) &#123; <span class="hljs-comment">// 识别到文件结束符则停止解析</span><br>        <span class="hljs-built_in">DCHECK</span>(<br>            speculations_<br>                .<span class="hljs-built_in">IsEmpty</span>());  <span class="hljs-comment">// There should never be any chunks after the EOF.</span><br>        <span class="hljs-built_in">PrepareToStopParsing</span>();<br>      &#125;<br>      <span class="hljs-keyword">break</span>;<br>    &#125;<br>......<br>    <span class="hljs-built_in">ConstructTreeFromCompactHTMLToken</span>(*it); <span class="hljs-comment">// 生成Element</span><br><br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">IsPaused</span>()) &#123;<br>      <span class="hljs-comment">// The script or stylesheet should be the last token of this bunch.</span><br>      <span class="hljs-built_in">DCHECK_EQ</span>(it + <span class="hljs-number">1</span>, tokens-&gt;<span class="hljs-built_in">end</span>());<br>      <span class="hljs-keyword">if</span> (<span class="hljs-built_in">IsWaitingForScripts</span>())<br>        <span class="hljs-built_in">RunScriptsForPausedTreeBuilder</span>();<br>      <span class="hljs-built_in">ValidateSpeculations</span>(std::<span class="hljs-built_in">move</span>(chunk));<br>      <span class="hljs-keyword">break</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">if</span> (it-&gt;<span class="hljs-built_in">GetType</span>() == HTMLToken::kEndOfFile) &#123;  <span class="hljs-comment">// 识别到文件结束符则停止解析</span><br>      <span class="hljs-comment">// The EOF is assumed to be the last token of this bunch.</span><br>      <span class="hljs-built_in">DCHECK_EQ</span>(it + <span class="hljs-number">1</span>, tokens-&gt;<span class="hljs-built_in">end</span>());<br>      <span class="hljs-comment">// There should never be any chunks after the EOF.</span><br>      <span class="hljs-built_in">DCHECK</span>(speculations_.<span class="hljs-built_in">IsEmpty</span>());<br>      <span class="hljs-built_in">PrepareToStopParsing</span>();<br>      <span class="hljs-keyword">break</span>;<br>    &#125;<br>......<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="第九步：CompactHTMLToken转换成AtomicHTMLToken"><a href="#第九步：CompactHTMLToken转换成AtomicHTMLToken" class="headerlink" title="第九步：CompactHTMLToken转换成AtomicHTMLToken"></a>第九步：CompactHTMLToken转换成AtomicHTMLToken</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs C++"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">HTMLDocumentParser::ConstructTreeFromCompactHTMLToken</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    <span class="hljs-type">const</span> CompactHTMLToken&amp; compact_token)</span> </span>&#123;<br>  <span class="hljs-function">AtomicHTMLToken <span class="hljs-title">token</span><span class="hljs-params">(compact_token)</span></span>; <span class="hljs-comment">// 把CompactHTMLToken转换成AtomicHTMLToken</span><br>  tree_builder_-&gt;<span class="hljs-built_in">ConstructTree</span>(&amp;token);<br>  <span class="hljs-built_in">CheckIfBodyStylesheetAdded</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="第十步：ConstructTree生成Element，建立DomTree"><a href="#第十步：ConstructTree生成Element，建立DomTree" class="headerlink" title="第十步：ConstructTree生成Element，建立DomTree"></a>第十步：ConstructTree生成Element，建立DomTree</h3><p>这个下章再讲解</p>
+<h2 id="优化思路"><a href="#优化思路" class="headerlink" title="优化思路"></a>优化思路</h2><p>1.在解析过程中如果遇到js标签会暂停解析流程执行js，所以head标签内的js尽量少并且短小精悍，可以适当用直接写在标签内，尽量在head里面少用url，因为url还需要发起网络加载（网络加载是耗时的），当前还可以用js async属性延迟执行，这样做可以快速出首帧，增强体验。<br>2.调整Token的个数限制，可以加快Dom Tree的构建，从而加快排版渲染首帧展示。</p>
+<p>同步知乎：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/48524320">https://zhuanlan.zhihu.com/p/48524320</a></p>
+
+            </div>
+            <hr>
+            <div>
+              <div class="post-metas mb-3">
+                
+                  <div class="post-meta mr-3">
+                    <i class="iconfont icon-category"></i>
+                    
+                      <a class="hover-with-bg" href="/categories/Chromium/">Chromium</a>
+                    
+                  </div>
+                
+                
+                  <div class="post-meta">
+                    <i class="iconfont icon-tags"></i>
+                    
+                      <a class="hover-with-bg" href="/tags/Parse/">Parse</a>
+                    
+                      <a class="hover-with-bg" href="/tags/Token/">Token</a>
+                    
+                  </div>
+                
+              </div>
+              
+                <p class="note note-warning">
+                  
+                    本博客所有文章除特别声明外，均采用 <a target="_blank" href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh" rel="nofollow noopener noopener">CC BY-SA 4.0 协议</a> ，转载请注明出处！
+                  
+                </p>
+              
+              
+                <div class="post-prevnext">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink-Html%E8%A7%A3%E6%9E%90-2/">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">浏览器内核原理--Chromium Blink Html解析(2)</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/05/04/%E6%B5%8F%E8%A7%88%E5%99%A8%E5%86%85%E6%A0%B8%E5%8E%9F%E7%90%86-Chromium-Blink%E6%B5%81%E7%A8%8B-PaintLayer%E5%92%8CGraphicsLayer/">
+                        <span class="hidden-mobile">浏览器内核原理--Chromium Blink流程 PaintLayer和GraphicsLayer</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+              <!-- Comments -->
+              <article class="comments" id="comments" lazyload>
+                
+                  
+                
+                
+
+              </article>
+            
+          </article>
+        </div>
+      </div>
+    </div>
+    
+      <div class="d-none d-lg-block col-lg-2 toc-container" id="toc-ctn">
+        <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+      </div>
+    
+  </div>
+</div>
+
+<!-- Custom -->
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v"
+                 for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+
+    
+  </main>
+
+  <footer class="text-center mt-5 py-3">
+  <div class="footer-content">
+     <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+  </div>
+  
+  <div class="statistics">
+    
+    
+
+    
+      
+        <!-- 不蒜子统计PV -->
+        <span id="busuanzi_container_site_pv" style="display: none">
+            总访问量 
+            <span id="busuanzi_value_site_pv"></span>
+             次
+          </span>
+      
+      
+        <!-- 不蒜子统计UV -->
+        <span id="busuanzi_container_site_uv" style="display: none">
+            总访客数 
+            <span id="busuanzi_value_site_uv"></span>
+             人
+          </span>
+      
+    
+  </div>
+
+
+  
+
+  
+</footer>
+
+
+  <!-- SCRIPTS -->
+  
+  <script  src="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nprogress@0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" ></script>
+<script  src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+<!-- Plugins -->
+
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+  
+
+
+
+  
+    <script  src="https://cdn.jsdelivr.net/npm/tocbot@4/dist/tocbot.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js" ></script>
+  
+  
+    <script  src="https://cdn.jsdelivr.net/npm/anchor-js@4/anchor.min.js" ></script>
+  
+  
+    <script defer src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js" ></script>
+  
+
+
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+  <script  src="https://cdn.jsdelivr.net/npm/typed.js@2/lib/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var title = document.getElementById('subtitle').title;
+      
+        typing(title);
+      
+    })(window, document);
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+<!-- 主题的启动项 保持在最底部 -->
+<script  src="/js/boot.js" ></script>
+
+
+</body>
+</html>
